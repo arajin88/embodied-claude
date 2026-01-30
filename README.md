@@ -15,7 +15,7 @@
 | MCP サーバー | 身体部位 | 機能 | 対応ハードウェア |
 |-------------|---------|------|-----------------|
 | [usb-webcam-mcp](./usb-webcam-mcp/) | 目 | USB カメラから画像取得 | nuroum V11 等 |
-| [wifi_cam_mcp](./wifi_cam_mcp/) | 目・首・耳 | PTZ カメラ制御 + 音声認識 | TP-Link Tapo C210/C220 |
+| [wifi-cam-mcp](./wifi-cam-mcp/) | 目・首・耳 | PTZ カメラ制御 + 音声認識 | TP-Link Tapo C210/C220 |
 | [memory-mcp](./memory-mcp/) | 脳 | 長期記憶（セマンティック検索） | ChromaDB |
 | [system-temperature-mcp](./system-temperature-mcp/) | 体温感覚 | システム温度監視 | Linux sensors |
 
@@ -31,7 +31,7 @@
           │               │               │               │
           ▼               ▼               ▼               ▼
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│ usb-webcam  │   │  wifi_cam   │   │   memory    │   │   system    │
+│ usb-webcam  │   │  wifi-cam   │   │   memory    │   │   system    │
 │    -mcp     │   │    -mcp     │   │    -mcp     │   │ temperature │
 │             │   │             │   │             │   │    -mcp     │
 │   (目)      │   │ (目/首/耳)  │   │   (脳)      │   │ (体温感覚)  │
@@ -83,10 +83,10 @@ usbipd bind --busid <BUSID>
 usbipd attach --wsl --busid <BUSID>
 ```
 
-#### wifi_cam_mcp（Wi-Fi カメラ）
+#### wifi-cam-mcp（Wi-Fi カメラ）
 
 ```bash
-cd wifi_cam_mcp
+cd wifi-cam-mcp
 uv sync
 
 # 環境変数を設定
@@ -128,7 +128,7 @@ uv sync
     },
     "wifi-cam": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/wifi_cam_mcp", "wifi-cam-mcp"],
+      "args": ["run", "--directory", "/path/to/embodied-claude/wifi-cam-mcp", "wifi-cam-mcp"],
       "env": {
         "TAPO_CAMERA_HOST": "192.168.1.xxx",
         "TAPO_USERNAME": "your-username",
@@ -179,7 +179,7 @@ Claude Code を起動すると、自然言語でカメラを操作できる：
 | `list_cameras` | 接続されているカメラの一覧 |
 | `capture_image` | 画像をキャプチャ |
 
-### wifi_cam_mcp
+### wifi-cam-mcp
 
 | ツール | 説明 |
 |--------|------|
