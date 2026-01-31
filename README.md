@@ -105,7 +105,7 @@ cp .env.example .env
 
 1. 「ホーム」タブから登録したカメラを選択
 
-<img width="25%" height="25%" src="https://github.com/user-attachments/assets/45902385-e219-4ca4-aefa-781b1e7b4811)">
+<img width="25%" height="25%" src="https://github.com/user-attachments/assets/45902385-e219-4ca4-aefa-781b1e7b4811">
 
 2. 右上の歯車アイコンを選択
 
