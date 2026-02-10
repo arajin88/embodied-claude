@@ -14,7 +14,7 @@ from mcp.types import (
     Tool,
 )
 
-from .camera import AudioResult, CameraPosition, Direction, TapoCamera
+from .camera import TapoCamera
 from .config import CameraConfig, ServerConfig
 
 logging.basicConfig(level=logging.INFO)
@@ -183,194 +183,198 @@ class CameraMCPServer:
 
             # Add stereo vision tools if right camera is configured
             if self._has_stereo:
-                tools.extend([
-                    Tool(
-                        name="see_right",
-                        description="See with your RIGHT eye only. Use this when you want to check what the right camera sees specifically.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="see_both",
-                        description="See with BOTH eyes simultaneously (stereo vision). Returns two images side by side - left eye and right eye views. Use this for depth perception or comparing views from both cameras.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="right_eye_look_left",
-                        description="Turn your RIGHT eye to the left.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to turn (1-90 degrees, default: 30)",
-                                    "default": 30,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                tools.extend(
+                    [
+                        Tool(
+                            name="see_right",
+                            description="See with your RIGHT eye only. Use this when you want to check what the right camera sees specifically.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="right_eye_look_right",
-                        description="Turn your RIGHT eye to the right.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to turn (1-90 degrees, default: 30)",
-                                    "default": 30,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="see_both",
+                            description="See with BOTH eyes simultaneously (stereo vision). Returns two images side by side - left eye and right eye views. Use this for depth perception or comparing views from both cameras.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="right_eye_look_up",
-                        description="Tilt your RIGHT eye up.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to tilt (1-90 degrees, default: 20)",
-                                    "default": 20,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="right_eye_look_left",
+                            description="Turn your RIGHT eye to the left.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to turn (1-90 degrees, default: 30)",
+                                        "default": 30,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="right_eye_look_down",
-                        description="Tilt your RIGHT eye down.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to tilt (1-90 degrees, default: 20)",
-                                    "default": 20,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="right_eye_look_right",
+                            description="Turn your RIGHT eye to the right.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to turn (1-90 degrees, default: 30)",
+                                        "default": 30,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="both_eyes_look_left",
-                        description="Turn BOTH eyes to the left together (synchronized head movement).",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to turn (1-90 degrees, default: 30)",
-                                    "default": 30,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="right_eye_look_up",
+                            description="Tilt your RIGHT eye up.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to tilt (1-90 degrees, default: 20)",
+                                        "default": 20,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="both_eyes_look_right",
-                        description="Turn BOTH eyes to the right together (synchronized head movement).",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to turn (1-90 degrees, default: 30)",
-                                    "default": 30,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="right_eye_look_down",
+                            description="Tilt your RIGHT eye down.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to tilt (1-90 degrees, default: 20)",
+                                        "default": 20,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="both_eyes_look_up",
-                        description="Tilt BOTH eyes up together (synchronized head movement).",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to tilt (1-90 degrees, default: 20)",
-                                    "default": 20,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="both_eyes_look_left",
+                            description="Turn BOTH eyes to the left together (synchronized head movement).",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to turn (1-90 degrees, default: 30)",
+                                        "default": 30,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="both_eyes_look_down",
-                        description="Tilt BOTH eyes down together (synchronized head movement).",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {
-                                "degrees": {
-                                    "type": "integer",
-                                    "description": "How far to tilt (1-90 degrees, default: 20)",
-                                    "default": 20,
-                                    "minimum": 1,
-                                    "maximum": 90,
-                                }
+                        ),
+                        Tool(
+                            name="both_eyes_look_right",
+                            description="Turn BOTH eyes to the right together (synchronized head movement).",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to turn (1-90 degrees, default: 30)",
+                                        "default": 30,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
                             },
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="get_eye_positions",
-                        description="Get current position (pan/tilt angles) of both eyes. Use this to check alignment.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="align_eyes",
-                        description="Align both eyes to look at the same direction by adjusting the right eye to match the left eye's position.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    ),
-                    Tool(
-                        name="reset_eye_positions",
-                        description="Reset position tracking for both eyes to (0,0). Use this after manually centering the cameras.",
-                        inputSchema={
-                            "type": "object",
-                            "properties": {},
-                            "required": [],
-                        },
-                    ),
-                ])
+                        ),
+                        Tool(
+                            name="both_eyes_look_up",
+                            description="Tilt BOTH eyes up together (synchronized head movement).",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to tilt (1-90 degrees, default: 20)",
+                                        "default": 20,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
+                            },
+                        ),
+                        Tool(
+                            name="both_eyes_look_down",
+                            description="Tilt BOTH eyes down together (synchronized head movement).",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {
+                                    "degrees": {
+                                        "type": "integer",
+                                        "description": "How far to tilt (1-90 degrees, default: 20)",
+                                        "default": 20,
+                                        "minimum": 1,
+                                        "maximum": 90,
+                                    }
+                                },
+                                "required": [],
+                            },
+                        ),
+                        Tool(
+                            name="get_eye_positions",
+                            description="Get current position (pan/tilt angles) of both eyes. Use this to check alignment.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                            },
+                        ),
+                        Tool(
+                            name="align_eyes",
+                            description="Align both eyes to look at the same direction by adjusting the right eye to match the left eye's position.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                            },
+                        ),
+                        Tool(
+                            name="reset_eye_positions",
+                            description="Reset position tracking for both eyes to (0,0). Use this after manually centering the cameras.",
+                            inputSchema={
+                                "type": "object",
+                                "properties": {},
+                                "required": [],
+                            },
+                        ),
+                    ]
+                )
 
             return tools
 
         @self._server.call_tool()
-        async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent | ImageContent]:
+        async def call_tool(
+            name: str, arguments: dict[str, Any]
+        ) -> list[TextContent | ImageContent]:
             """Handle tool calls."""
             if self._camera is None:
                 return [TextContent(type="text", text="Error: Camera not connected")]
@@ -463,7 +467,9 @@ class CameraMCPServer:
                         transcribe = arguments.get("transcribe", True)
                         result = await self._camera.listen_audio(duration, transcribe)
 
-                        response_text = f"Recorded {result.duration}s of audio at {result.timestamp}\n"
+                        response_text = (
+                            f"Recorded {result.duration}s of audio at {result.timestamp}\n"
+                        )
                         response_text += f"Audio file: {result.file_path}\n"
 
                         if result.transcript:
@@ -473,7 +479,9 @@ class CameraMCPServer:
 
                     case "see_right":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         result = await self._camera_right.capture_image()
                         return [
                             ImageContent(
@@ -489,7 +497,9 @@ class CameraMCPServer:
 
                     case "see_both":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
 
                         # Capture from both cameras concurrently
                         left_task = self._camera.capture_image()
@@ -517,83 +527,127 @@ class CameraMCPServer:
 
                     case "right_eye_look_left":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 30)
                         result = await self._camera_right.pan_left(degrees)
                         return [TextContent(type="text", text=f"Right eye: {result.message}")]
 
                     case "right_eye_look_right":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 30)
                         result = await self._camera_right.pan_right(degrees)
                         return [TextContent(type="text", text=f"Right eye: {result.message}")]
 
                     case "right_eye_look_up":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 20)
                         result = await self._camera_right.tilt_up(degrees)
                         return [TextContent(type="text", text=f"Right eye: {result.message}")]
 
                     case "right_eye_look_down":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 20)
                         result = await self._camera_right.tilt_down(degrees)
                         return [TextContent(type="text", text=f"Right eye: {result.message}")]
 
                     case "both_eyes_look_left":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 30)
                         left_task = self._camera.pan_left(degrees)
                         right_task = self._camera_right.pan_left(degrees)
                         await asyncio.gather(left_task, right_task)
-                        return [TextContent(type="text", text=f"Both eyes moved left by {degrees} degrees")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Both eyes moved left by {degrees} degrees"
+                            )
+                        ]
 
                     case "both_eyes_look_right":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 30)
                         left_task = self._camera.pan_right(degrees)
                         right_task = self._camera_right.pan_right(degrees)
                         await asyncio.gather(left_task, right_task)
-                        return [TextContent(type="text", text=f"Both eyes moved right by {degrees} degrees")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Both eyes moved right by {degrees} degrees"
+                            )
+                        ]
 
                     case "both_eyes_look_up":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 20)
                         left_task = self._camera.tilt_up(degrees)
                         right_task = self._camera_right.tilt_up(degrees)
                         await asyncio.gather(left_task, right_task)
-                        return [TextContent(type="text", text=f"Both eyes tilted up by {degrees} degrees")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Both eyes tilted up by {degrees} degrees"
+                            )
+                        ]
 
                     case "both_eyes_look_down":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         degrees = arguments.get("degrees", 20)
                         left_task = self._camera.tilt_down(degrees)
                         right_task = self._camera_right.tilt_down(degrees)
                         await asyncio.gather(left_task, right_task)
-                        return [TextContent(type="text", text=f"Both eyes tilted down by {degrees} degrees")]
+                        return [
+                            TextContent(
+                                type="text", text=f"Both eyes tilted down by {degrees} degrees"
+                            )
+                        ]
 
                     case "get_eye_positions":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         left_pos = self._camera.get_position()
                         right_pos = self._camera_right.get_position()
-                        return [TextContent(
-                            type="text",
-                            text=f"Left eye:  pan={left_pos.pan:+4d}°, tilt={left_pos.tilt:+4d}°\n"
-                                 f"Right eye: pan={right_pos.pan:+4d}°, tilt={right_pos.tilt:+4d}°\n"
-                                 f"Difference: pan={left_pos.pan - right_pos.pan:+4d}°, tilt={left_pos.tilt - right_pos.tilt:+4d}°"
-                        )]
+                        return [
+                            TextContent(
+                                type="text",
+                                text=(
+                                    f"Left eye:  pan={left_pos.pan:+.0f}deg,"
+                                    f" tilt={left_pos.tilt:+.0f}deg\n"
+                                    f"Right eye: pan={right_pos.pan:+.0f}deg,"
+                                    f" tilt={right_pos.tilt:+.0f}deg\n"
+                                    f"Difference:"
+                                    f" pan={left_pos.pan - right_pos.pan:+.0f}deg,"
+                                    f" tilt={left_pos.tilt - right_pos.tilt:+.0f}deg"
+                                ),
+                            )
+                        ]
 
                     case "align_eyes":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         left_pos = self._camera.get_position()
                         right_pos = self._camera_right.get_position()
 
@@ -618,14 +672,22 @@ class CameraMCPServer:
                         if not messages:
                             return [TextContent(type="text", text="Eyes already aligned!")]
 
-                        return [TextContent(type="text", text="Aligned eyes: " + ", ".join(messages))]
+                        return [
+                            TextContent(type="text", text="Aligned eyes: " + ", ".join(messages))
+                        ]
 
                     case "reset_eye_positions":
                         if not self._camera_right:
-                            return [TextContent(type="text", text="Error: Right camera not configured")]
+                            return [
+                                TextContent(type="text", text="Error: Right camera not configured")
+                            ]
                         self._camera.reset_position_tracking()
                         self._camera_right.reset_position_tracking()
-                        return [TextContent(type="text", text="Both eyes position tracking reset to (0, 0)")]
+                        return [
+                            TextContent(
+                                type="text", text="Both eyes position tracking reset to (0, 0)"
+                            )
+                        ]
 
                     case _:
                         return [TextContent(type="text", text=f"Unknown tool: {name}")]

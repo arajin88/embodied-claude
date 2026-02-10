@@ -15,9 +15,11 @@ class CameraConfig:
     host: str
     username: str
     password: str
+    onvif_port: int = 2020
     stream_url: str | None = None
     max_width: int = 1920
     max_height: int = 1080
+    mount_mode: str = "normal"  # "normal" (desktop) or "ceiling" (inverted)
 
     @classmethod
     def from_env(cls, prefix: str = "TAPO") -> "CameraConfig":
@@ -30,7 +32,15 @@ class CameraConfig:
         host = os.getenv(f"{prefix}_CAMERA_HOST", "") or os.getenv("TAPO_CAMERA_HOST", "")
         username = os.getenv(f"{prefix}_USERNAME", "") or os.getenv("TAPO_USERNAME", "")
         password = os.getenv(f"{prefix}_PASSWORD", "") or os.getenv("TAPO_PASSWORD", "")
+        onvif_port = int(
+            os.getenv(f"{prefix}_ONVIF_PORT", "") or os.getenv("TAPO_ONVIF_PORT", "") or "2020"
+        )
         stream_url = os.getenv(f"{prefix}_STREAM_URL") or os.getenv("TAPO_STREAM_URL")
+        mount_mode = (
+            os.getenv(f"{prefix}_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
+        ).lower()
+        if mount_mode not in ("normal", "ceiling"):
+            raise ValueError(f"Invalid mount mode '{mount_mode}'. Must be 'normal' or 'ceiling'.")
         max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "1920"))
         max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "1080"))
 
@@ -45,7 +55,9 @@ class CameraConfig:
             host=host,
             username=username,
             password=password,
+            onvif_port=onvif_port,
             stream_url=stream_url,
+            mount_mode=mount_mode,
             max_width=max_width,
             max_height=max_height,
         )
@@ -64,7 +76,13 @@ class CameraConfig:
         # Right camera can share username/password with left, or have its own
         username = os.getenv("TAPO_RIGHT_USERNAME", "") or os.getenv("TAPO_USERNAME", "")
         password = os.getenv("TAPO_RIGHT_PASSWORD", "") or os.getenv("TAPO_PASSWORD", "")
+        onvif_port = int(
+            os.getenv("TAPO_RIGHT_ONVIF_PORT", "") or os.getenv("TAPO_ONVIF_PORT", "") or "2020"
+        )
         stream_url = os.getenv("TAPO_RIGHT_STREAM_URL")
+        mount_mode = (
+            os.getenv("TAPO_RIGHT_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
+        ).lower()
         max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "1920"))
         max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "1080"))
 
@@ -75,7 +93,9 @@ class CameraConfig:
             host=host,
             username=username,
             password=password,
+            onvif_port=onvif_port,
             stream_url=stream_url,
+            mount_mode=mount_mode,
             max_width=max_width,
             max_height=max_height,
         )
