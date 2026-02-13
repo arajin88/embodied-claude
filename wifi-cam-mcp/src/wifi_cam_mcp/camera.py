@@ -286,9 +286,10 @@ class TapoCamera:
         # Process image
         image = Image.open(io.BytesIO(image_data))
 
-        # Tapo cameras output images assuming ceiling mount.
-        # In normal (desk) mode the image is upside-down, so rotate 180°.
-        if self._config.mount_mode != "ceiling":
+        # Tapo C220 firmware 1.1.1+: images are correctly oriented for
+        # desk (normal) mount.  In ceiling mode the camera is physically
+        # upside-down, so we rotate 180° to compensate.
+        if self._config.mount_mode == "ceiling":
             image = image.rotate(180)
 
         # Resize if needed
