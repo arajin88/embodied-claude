@@ -3,7 +3,6 @@
 import asyncio
 import json
 import logging
-from contextlib import asynccontextmanager
 from typing import Any
 
 from mcp.server import Server
@@ -376,8 +375,11 @@ class CameraMCPServer:
             name: str, arguments: dict[str, Any]
         ) -> list[TextContent | ImageContent]:
             """Handle tool calls."""
-            if self._camera is None:
-                return [TextContent(type="text", text="Error: Camera not connected")]
+            try:
+                await self.ensure_camera_connected()
+            except Exception as e:
+                logger.exception("Failed to connect to camera")
+                return [TextContent(type="text", text=f"Error: Failed to connect to camera: {e!s}")]
 
             try:
                 match name:
@@ -696,9 +698,12 @@ class CameraMCPServer:
                 logger.exception(f"Error in tool {name}")
                 return [TextContent(type="text", text=f"Error: {e!s}")]
 
-    async def connect_camera(self) -> None:
-        """Connect to the camera(s)."""
-        # Connect primary (left) camera
+    async def ensure_camera_connected(self) -> None:
+        """Connect to the camera(s) lazily on first use."""
+        if self._camera is not None and self._camera._tapo is not None:
+            return
+
+        # Connect (or reconnect) primary (left) camera
         config = CameraConfig.from_env()
         self._camera = TapoCamera(config, self._server_config.capture_dir)
         await self._camera.connect()
@@ -730,24 +735,17 @@ class CameraMCPServer:
             self._has_stereo = False
             logger.info("Disconnected from right camera")
 
-    @asynccontextmanager
-    async def run_context(self):
-        """Context manager for server lifecycle."""
-        try:
-            await self.connect_camera()
-            yield
-        finally:
-            await self.disconnect_camera()
-
     async def run(self) -> None:
         """Run the MCP server."""
-        async with self.run_context():
+        try:
             async with stdio_server() as (read_stream, write_stream):
                 await self._server.run(
                     read_stream,
                     write_stream,
                     self._server.create_initialization_options(),
                 )
+        finally:
+            await self.disconnect_camera()
 
 
 def main() -> None:

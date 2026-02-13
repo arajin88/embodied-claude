@@ -35,6 +35,15 @@ ENV/
 .env
 .env.local
 .env.*.local
+.env.backup
+*コピー*.env
+
+# Windows shortcuts and backup files
+*.lnk
+*コピー*.json
+
+# Claude Code local settings (machine-specific)
+.claude/
 
 # MCP config (may contain API keys)
 .mcp.json

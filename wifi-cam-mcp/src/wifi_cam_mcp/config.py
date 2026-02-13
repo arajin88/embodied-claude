@@ -2,10 +2,13 @@
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Ensure .env is loaded from the project root (wifi-cam-mcp/), not CWD
+_project_root = Path(__file__).resolve().parent.parent.parent
+load_dotenv(_project_root / ".env", override=True)
 
 
 @dataclass(frozen=True)
@@ -17,6 +20,8 @@ class CameraConfig:
     password: str
     onvif_port: int = 2020
     stream_url: str | None = None
+    stream_username: str | None = None
+    stream_password: str | None = None
     max_width: int = 1920
     max_height: int = 1080
     mount_mode: str = "normal"  # "normal" (desktop) or "ceiling" (inverted)
@@ -36,6 +41,8 @@ class CameraConfig:
             os.getenv(f"{prefix}_ONVIF_PORT", "") or os.getenv("TAPO_ONVIF_PORT", "") or "2020"
         )
         stream_url = os.getenv(f"{prefix}_STREAM_URL") or os.getenv("TAPO_STREAM_URL")
+        stream_username = os.getenv(f"{prefix}_STREAM_USERNAME") or os.getenv("TAPO_STREAM_USERNAME")
+        stream_password = os.getenv(f"{prefix}_STREAM_PASSWORD") or os.getenv("TAPO_STREAM_PASSWORD")
         mount_mode = (
             os.getenv(f"{prefix}_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
         ).lower()
@@ -57,6 +64,8 @@ class CameraConfig:
             password=password,
             onvif_port=onvif_port,
             stream_url=stream_url,
+            stream_username=stream_username,
+            stream_password=stream_password,
             mount_mode=mount_mode,
             max_width=max_width,
             max_height=max_height,
@@ -80,6 +89,8 @@ class CameraConfig:
             os.getenv("TAPO_RIGHT_ONVIF_PORT", "") or os.getenv("TAPO_ONVIF_PORT", "") or "2020"
         )
         stream_url = os.getenv("TAPO_RIGHT_STREAM_URL")
+        stream_username = os.getenv("TAPO_RIGHT_STREAM_USERNAME") or os.getenv("TAPO_STREAM_USERNAME")
+        stream_password = os.getenv("TAPO_RIGHT_STREAM_PASSWORD") or os.getenv("TAPO_STREAM_PASSWORD")
         mount_mode = (
             os.getenv("TAPO_RIGHT_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
         ).lower()
@@ -95,6 +106,8 @@ class CameraConfig:
             password=password,
             onvif_port=onvif_port,
             stream_url=stream_url,
+            stream_username=stream_username,
+            stream_password=stream_password,
             mount_mode=mount_mode,
             max_width=max_width,
             max_height=max_height,
