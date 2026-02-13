@@ -120,13 +120,16 @@ class ServerConfig:
 
     name: str = "wifi-cam-mcp"
     version: str = "0.1.0"
-    capture_dir: str = "/tmp/wifi-cam-mcp"
+    capture_dir: str = ""
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
         """Create config from environment variables."""
+        default_dir = os.path.join(
+            os.path.expanduser("~"), ".cache", "wifi-cam-mcp"
+        )
         return cls(
             name=os.getenv("MCP_SERVER_NAME", "wifi-cam-mcp"),
             version=os.getenv("MCP_SERVER_VERSION", "0.1.0"),
-            capture_dir=os.getenv("CAPTURE_DIR", "/tmp/wifi-cam-mcp"),
+            capture_dir=os.getenv("CAPTURE_DIR", default_dir),
         )

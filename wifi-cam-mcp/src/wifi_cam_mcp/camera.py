@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import logging
+import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -105,8 +106,12 @@ class TapoCamera:
     Supports C210, C220, and other ONVIF-compatible Tapo PTZ cameras.
     """
 
-    def __init__(self, config: CameraConfig, capture_dir: str = "/tmp/wifi-cam-mcp"):
+    def __init__(self, config: CameraConfig, capture_dir: str = ""):
         self._config = config
+        if not capture_dir:
+            capture_dir = os.path.join(
+                os.path.expanduser("~"), ".cache", "wifi-cam-mcp"
+            )
         self._capture_dir = Path(capture_dir)
         self._lock = asyncio.Lock()
 
