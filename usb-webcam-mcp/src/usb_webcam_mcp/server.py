@@ -3,6 +3,8 @@
 import base64
 import io
 import os
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 # Suppress OpenCV error messages
@@ -22,21 +24,43 @@ from PIL import Image
 
 server = Server("usb-webcam-mcp")
 
+CAPTURE_DIR = Path(os.getenv("CAPTURE_DIR", os.path.join(os.path.expanduser("~"), ".cache", "usb-webcam-mcp")))
+CAPTURE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Cache: camera_index -> (max_width, max_height)
+_resolution_cache: dict[int, tuple[int, int]] = {}
+
+
+def _detect_max_resolution(camera_index: int) -> tuple[int, int] | None:
+    """Detect the maximum resolution for a camera and cache it."""
+    if camera_index in _resolution_cache:
+        return _resolution_cache[camera_index]
+
+    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        return None
+    try:
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 9999)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 9999)
+        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        _resolution_cache[camera_index] = (w, h)
+        return (w, h)
+    finally:
+        cap.release()
+
 
 def find_available_cameras(max_cameras: int = 10) -> list[dict[str, Any]]:
-    """Find available camera devices."""
+    """Find available camera devices and cache their max resolutions."""
     cameras = []
     for i in range(max_cameras):
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        res = _detect_max_resolution(i)
+        if res is not None:
             cameras.append({
                 "index": i,
-                "width": width,
-                "height": height,
+                "max_width": res[0],
+                "max_height": res[1],
             })
-            cap.release()
     return cameras
 
 
@@ -45,30 +69,31 @@ def capture_from_camera(
     width: int | None = None,
     height: int | None = None,
 ) -> bytes:
-    """Capture an image from the specified camera."""
-    cap = cv2.VideoCapture(camera_index)
+    """Capture an image from the specified camera at the best resolution."""
+    if width is None or height is None:
+        # Use cached max resolution
+        res = _detect_max_resolution(camera_index)
+        if res is not None:
+            width, height = res
+        else:
+            raise RuntimeError(f"Cannot open camera at index {camera_index}")
 
+    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
     if not cap.isOpened():
         raise RuntimeError(f"Cannot open camera at index {camera_index}")
 
     try:
-        if width is not None:
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-        if height is not None:
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
-        # Read a few frames to let the camera adjust
-        for _ in range(5):
+        for _ in range(10):
             cap.read()
 
         ret, frame = cap.read()
-        if not ret:
-            raise RuntimeError("Failed to capture image from camera")
+        if not ret or frame is None:
+            raise RuntimeError(f"Failed to capture at {width}x{height} from camera {camera_index}")
 
-        # Convert BGR to RGB
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # Convert to PIL Image and then to JPEG bytes
         image = Image.fromarray(frame_rgb)
         buffer = io.BytesIO()
         image.save(buffer, format="JPEG", quality=85)
@@ -103,11 +128,11 @@ async def list_tools() -> list[Tool]:
                     },
                     "width": {
                         "type": "integer",
-                        "description": "Desired image width in pixels (optional)",
+                        "description": "Desired image width in pixels (optional, defaults to max resolution)",
                     },
                     "height": {
                         "type": "integer",
-                        "description": "Desired image height in pixels (optional)",
+                        "description": "Desired image height in pixels (optional, defaults to max resolution)",
                     },
                 },
                 "required": [],
@@ -126,7 +151,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent | 
 
         lines = ["Available cameras:"]
         for cam in cameras:
-            lines.append(f"  - Index {cam['index']}: {cam['width']}x{cam['height']}")
+            lines.append(f"  - Index {cam['index']}: max {cam['max_width']}x{cam['max_height']}")
         return [TextContent(type="text", text="\n".join(lines))]
 
     elif name == "see":
@@ -138,12 +163,21 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent | 
             image_bytes = capture_from_camera(camera_index, width, height)
             image_base64 = base64.b64encode(image_bytes).decode("utf-8")
 
+            # Save image to file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            file_path = CAPTURE_DIR / f"capture_{timestamp}_cam{camera_index}.jpg"
+            file_path.write_bytes(image_bytes)
+
             return [
                 ImageContent(
                     type="image",
                     data=image_base64,
                     mimeType="image/jpeg",
-                )
+                ),
+                TextContent(
+                    type="text",
+                    text=f"Saved: {file_path}",
+                ),
             ]
         except RuntimeError as e:
             return [TextContent(type="text", text=f"Error: {e}")]
