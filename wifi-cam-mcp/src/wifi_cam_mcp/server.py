@@ -700,7 +700,7 @@ class CameraMCPServer:
 
     async def ensure_camera_connected(self) -> None:
         """Connect to the camera(s) lazily on first use."""
-        if self._camera is not None and self._camera._tapo is not None:
+        if self._camera is not None and self._camera._connected:
             return
 
         # Connect (or reconnect) primary (left) camera
