@@ -1,5 +1,7 @@
 # Embodied Claude
 
+※kmizuさんのものをそのまま載せています。
+
 <blockquote class="twitter-tweet"><p lang="ja" dir="ltr">さすがに室外機はお気に召さないらしい <a href="https://t.co/kSDPl4LvB3">pic.twitter.com/kSDPl4LvB3</a></p>&mdash; kmizu (@kmizu) <a href="https://twitter.com/kmizu/status/2019054065808732201?ref_src=twsrc%5Etfw">February 4, 2026</a></blockquote>
 
 **AIに身体を与えるプロジェクト**
