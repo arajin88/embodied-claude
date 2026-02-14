@@ -403,20 +403,21 @@ class TapoCamera:
         pan_delta = 0.0
         tilt_delta = 0.0
 
+        # Tapo C220 firmware 1.1.1+: ONVIF pan/tilt conventions
+        # x+ = camera pans left, x- = camera pans right
+        # y+ = camera tilts up, y- = camera tilts down
         match direction:
             case Direction.LEFT:
-                pan_delta = -_degrees_to_normalized_pan(degrees)
-            case Direction.RIGHT:
                 pan_delta = _degrees_to_normalized_pan(degrees)
+            case Direction.RIGHT:
+                pan_delta = -_degrees_to_normalized_pan(degrees)
             case Direction.UP:
-                # Tapo C220 ONVIF: y+ = physical DOWN, y- = physical UP
-                # (confirmed: y=1.0 is the lower limit when desk-mounted)
-                tilt_delta = -_degrees_to_normalized_tilt(degrees)
-            case Direction.DOWN:
                 tilt_delta = _degrees_to_normalized_tilt(degrees)
+            case Direction.DOWN:
+                tilt_delta = -_degrees_to_normalized_tilt(degrees)
 
         # In ceiling mount mode the camera is upside-down:
-        # - Tilt inverts (y=+1.0 becomes the upper limit)
+        # - Tilt inverts
         # - Pan mirrors (left/right swap)
         if self._config.mount_mode == "ceiling":
             pan_delta = -pan_delta
