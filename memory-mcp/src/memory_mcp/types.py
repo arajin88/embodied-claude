@@ -110,16 +110,20 @@ class SensoryData:
     metadata: dict[str, Any]  # {width, height, camera_position, etc.}
     description: str | None  # オプション: AI生成の説明文
     timestamp: str  # ISO 8601
+    image_data: str | None = None  # base64 JPEG（視覚記憶の低解像度コピー）
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
-        return {
+        result: dict[str, Any] = {
             "sensory_type": self.sensory_type,
             "file_path": self.file_path,
             "metadata": self.metadata,
             "description": self.description,
             "timestamp": self.timestamp,
         }
+        if self.image_data is not None:
+            result["image_data"] = self.image_data
+        return result
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "SensoryData":
@@ -130,6 +134,7 @@ class SensoryData:
             metadata=data.get("metadata", {}),
             description=data.get("description"),
             timestamp=data["timestamp"],
+            image_data=data.get("image_data"),
         )
 
 
