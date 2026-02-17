@@ -128,6 +128,8 @@ cp .env.example .env
 # For VOICEVOX (free & local):
 # Docker: docker run -p 50021:50021 voicevox/voicevox_engine:cpu-latest
 # Set VOICEVOX_URL=http://localhost:50021 in .env
+# VOICEVOX_SPEAKER=3 to change default character (e.g. 0=Shikoku Metan, 3=Zundamon, 8=Kasukabe Tsumugi)
+# Character list: curl http://localhost:50021/speakers
 
 # For WSL audio issues:
 # TTS_PLAYBACK=paplay
@@ -146,39 +148,14 @@ uv sync
 
 ### 3. Claude Code Configuration
 
-Register MCP servers in `.mcp.json` in your working directory:
+Copy the template and fill in your credentials:
 
-```json
-{
-  "mcpServers": {
-    "usb-webcam": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/usb-webcam-mcp", "usb-webcam-mcp"]
-    },
-    "wifi-cam": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/wifi-cam-mcp", "wifi-cam-mcp"],
-      "env": {
-        "TAPO_CAMERA_HOST": "192.168.1.xxx",
-        "TAPO_USERNAME": "your-username",
-        "TAPO_PASSWORD": "your-password"
-      }
-    },
-    "memory": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/memory-mcp", "memory-mcp"]
-    },
-    "tts": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/tts-mcp", "tts-mcp"],
-      "env": {
-        "ELEVENLABS_API_KEY": "your-api-key",
-        "VOICEVOX_URL": "http://localhost:50021"
-      }
-    }
-  }
-}
+```bash
+cp .mcp.json.example .mcp.json
+# Edit .mcp.json to set camera IP/password, API keys, etc.
 ```
+
+See [`.mcp.json.example`](./.mcp.json.example) for the full configuration template.
 
 ## Usage
 
