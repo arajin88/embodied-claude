@@ -29,6 +29,28 @@ jobs:
       - name: Run tests
         run: uv run pytest -v
 
+  test-tts-mcp:
+    name: Test tts-mcp
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tts-mcp
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Run tests
+        run: uv run pytest -v
+
   test-wifi-cam-mcp:
     name: Test wifi-cam-mcp
     runs-on: ubuntu-latest

@@ -16,9 +16,16 @@ embodied-claude/
 │       ├── camera.py      # Tapo カメラ制御
 │       └── config.py      # 設定管理
 │
-├── elevenlabs-t2s-mcp/     # ElevenLabs TTS（Python）
-│   └── src/elevenlabs_t2s_mcp/
-│       └── server.py       # MCP サーバー実装
+├── tts-mcp/               # TTS 統合サーバー（ElevenLabs + VOICEVOX）
+│   └── src/tts_mcp/
+│       ├── server.py      # MCP サーバー実装
+│       ├── config.py      # 設定管理
+│       ├── playback.py    # 再生ロジック
+│       ├── go2rtc.py      # go2rtc プロセス管理
+│       └── engines/
+│           ├── __init__.py    # TTSEngine Protocol
+│           ├── elevenlabs.py  # ElevenLabs エンジン
+│           └── voicevox.py    # VOICEVOX エンジン
 │
 ├── memory-mcp/            # 長期記憶システム（Python）
 │   └── src/memory_mcp/
@@ -139,11 +146,11 @@ uv run pytest -v       # テストが通ること
 **Emotion**: happy, sad, surprised, moved, excited, nostalgic, curious, neutral
 **Category**: daily, philosophical, technical, memory, observation, feeling, conversation
 
-### elevenlabs-t2s（声）
+### tts-mcp（声）
 
 | ツール | パラメータ | 説明 |
 |--------|-----------|------|
-| `say` | text, voice_id?, model_id?, output_format?, play_audio? | ElevenLabsで音声合成して発話 |
+| `say` | text, engine?, voice_id?, model_id?, output_format?, voicevox_speaker?, speed_scale?, pitch_scale?, play_audio?, speaker? | TTS で音声合成して発話（ElevenLabs / VOICEVOX 切替対応、speaker: camera/local/both） |
 
 ### system-temperature-mcp（体温感覚）
 

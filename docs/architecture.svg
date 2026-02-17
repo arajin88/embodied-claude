@@ -63,9 +63,9 @@
   <text x="450" y="165" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="11">-mcp</text>
   <text x="450" y="190" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-size="18">&#x1F9E0;</text>
 
-  <!-- elevenlabs-t2s-mcp -->
+  <!-- tts-mcp -->
   <rect x="560" y="120" width="140" height="80" rx="10" fill="url(#voice)" filter="url(#shadow)"/>
-  <text x="630" y="148" text-anchor="middle" fill="white" font-size="13" font-weight="bold">elevenlabs-t2s</text>
+  <text x="630" y="148" text-anchor="middle" fill="white" font-size="13" font-weight="bold">tts</text>
   <text x="630" y="165" text-anchor="middle" fill="rgba(255,255,255,0.85)" font-size="11">-mcp</text>
   <text x="630" y="190" text-anchor="middle" fill="rgba(255,255,255,0.9)" font-size="18">&#x1F5E3;</text>
 
@@ -98,10 +98,10 @@
   <text x="450" y="263" text-anchor="middle" fill="#374151" font-size="12" font-weight="600">ChromaDB</text>
   <text x="450" y="281" text-anchor="middle" fill="#6b7280" font-size="10">Vector DB + Pillow</text>
 
-  <!-- ElevenLabs -->
+  <!-- ElevenLabs / VOICEVOX -->
   <rect x="560" y="240" width="140" height="55" rx="8" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>
-  <text x="630" y="263" text-anchor="middle" fill="#374151" font-size="12" font-weight="600">ElevenLabs API</text>
-  <text x="630" y="281" text-anchor="middle" fill="#6b7280" font-size="10">+ go2rtc</text>
+  <text x="630" y="263" text-anchor="middle" fill="#374151" font-size="12" font-weight="600">ElevenLabs</text>
+  <text x="630" y="281" text-anchor="middle" fill="#6b7280" font-size="10">VOICEVOX + go2rtc</text>
 
   <!-- Linux Sensors -->
   <rect x="730" y="240" width="140" height="55" rx="8" fill="#f3f4f6" stroke="#d1d5db" stroke-width="1"/>

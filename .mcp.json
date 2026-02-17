@@ -16,13 +16,13 @@
       "command": "uv",
       "args": ["run", "--directory", "system-temperature-mcp", "system-temperature-mcp"]
     },
-    "elevenlabs-t2s": {
+    "tts": {
       "command": "uv",
-      "args": ["run", "--directory", "elevenlabs-t2s-mcp", "elevenlabs-t2s"],
+      "args": ["run", "--directory", "tts-mcp", "tts-mcp"],
       "env": {
         "GO2RTC_URL": "http://localhost:1984",
         "GO2RTC_STREAM": "tapo_cam",
-        "ELEVENLABS_PLAYBACK": "auto"
+        "TTS_PLAYBACK": "auto"
       }
     }
   }
