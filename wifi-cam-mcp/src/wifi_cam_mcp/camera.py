@@ -4,7 +4,6 @@ import asyncio
 import base64
 import io
 import logging
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
@@ -120,7 +119,6 @@ class TapoCamera:
         # Software position tracking (fallback when GetStatus unavailable)
         self._sw_position = CameraPosition()
         self._connected = False
-        self._whisper_model = None  # Cached Whisper model
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -249,16 +247,6 @@ class TapoCamera:
     # Image capture
     # ------------------------------------------------------------------
 
-    @property
-    def _stream_username(self) -> str:
-        """Username for RTSP stream (falls back to API username)."""
-        return self._config.stream_username or self._config.username
-
-    @property
-    def _stream_password(self) -> str:
-        """Password for RTSP stream (falls back to API password)."""
-        return self._config.stream_password or self._config.password
-
     async def capture_image(self, save_to_file: bool = True) -> CaptureResult:
         """Capture a snapshot from the camera.
 
@@ -276,20 +264,27 @@ class TapoCamera:
     async def _capture_image_impl(self, save_to_file: bool) -> CaptureResult:
         """Internal capture implementation."""
         # Try ONVIF snapshot first
-        image_data = await self._try_onvif_snapshot()
+        onvif_error = None
+        image_data = None
+        try:
+            image_data = await self._try_onvif_snapshot()
+        except Exception as e:
+            onvif_error = str(e)
 
         # Fall back to RTSP if ONVIF snapshot fails
         if image_data is None:
-            logger.info("ONVIF snapshot unavailable, falling back to RTSP capture")
+            logger.info(
+                "ONVIF snapshot unavailable (reason: %s), falling back to RTSP capture",
+                onvif_error or "empty response",
+            )
             image_data = await self._capture_via_rtsp()
 
         # Process image
         image = Image.open(io.BytesIO(image_data))
 
-        # Tapo C220 firmware 1.1.1+: images are correctly oriented for
-        # desk (normal) mount.  In ceiling mode the camera is physically
-        # upside-down, so we rotate 180° to compensate.
-        if self._config.mount_mode == "ceiling":
+        # Tapo cameras output images assuming ceiling mount.
+        # In normal (desk) mode the image is upside-down, so rotate 180°.
+        if self._config.mount_mode != "ceiling":
             image = image.rotate(180)
 
         # Resize if needed
@@ -332,8 +327,20 @@ class TapoCamera:
         return None
 
     async def _capture_via_rtsp(self) -> bytes:
-        """Capture a frame via RTSP using ffmpeg (fallback)."""
-        rtsp_url = self._get_rtsp_url()
+        """Capture a frame via RTSP using ffmpeg (fallback).
+
+        Tries main stream (stream1, high quality) first, then falls back
+        to sub stream (stream2) for low-bandwidth environments.
+        """
+        # Try main stream first (higher quality)
+        try:
+            return await self._capture_rtsp_stream(self._get_rtsp_url(sub_stream=False))
+        except Exception as e:
+            logger.info("Main stream (stream1) failed: %s, trying sub stream", e)
+        return await self._capture_rtsp_stream(self._get_rtsp_url(sub_stream=True))
+
+    async def _capture_rtsp_stream(self, rtsp_url: str) -> bytes:
+        """Capture a single frame from an RTSP stream."""
 
         with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
             tmp_path = tmp.name
@@ -356,22 +363,40 @@ class TapoCamera:
             process = await asyncio.create_subprocess_exec(
                 *cmd,
                 stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.PIPE,
             )
-            await asyncio.wait_for(process.wait(), timeout=10.0)
+            try:
+                _, stderr_data = await asyncio.wait_for(
+                    process.communicate(), timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                raise RuntimeError("RTSP capture timed out after 10s")
+
+            if process.returncode != 0:
+                stderr_msg = stderr_data.decode(errors="replace").strip()[-500:]
+                raise RuntimeError(
+                    f"ffmpeg RTSP capture failed (rc={process.returncode}): {stderr_msg}"
+                )
 
             with open(tmp_path, "rb") as f:
                 return f.read()
         finally:
             Path(tmp_path).unlink(missing_ok=True)
 
-    def _get_rtsp_url(self) -> str:
-        """Get RTSP stream URL."""
+    def _get_rtsp_url(self, sub_stream: bool = False) -> str:
+        """Get RTSP stream URL.
+
+        Args:
+            sub_stream: If True, use low-quality sub stream (stream2)
+                        for low-bandwidth environments.
+        """
         if self._config.stream_url:
             return self._config.stream_url
+        stream = "stream2" if sub_stream else "stream1"
         return (
-            f"rtsp://{self._stream_username}:{self._stream_password}"
-            f"@{self._config.host}:554/stream1"
+            f"rtsp://{self._config.username}:{self._config.password}"
+            f"@{self._config.host}:554/{stream}"
         )
 
     # ------------------------------------------------------------------
@@ -620,10 +645,6 @@ class TapoCamera:
                 "ffmpeg",
                 "-rtsp_transport",
                 "tcp",
-                "-analyzeduration",
-                "5000000",
-                "-probesize",
-                "5000000",
                 "-i",
                 rtsp_url,
                 "-vn",  # No video
@@ -639,34 +660,12 @@ class TapoCamera:
                 file_path,
             ]
 
-            timeout_sec = duration + 15.0
-
-            def _run_ffmpeg() -> subprocess.CompletedProcess[bytes]:
-                return subprocess.run(
-                    cmd,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    timeout=timeout_sec,
-                )
-
-            try:
-                result = await asyncio.to_thread(_run_ffmpeg)
-                returncode = result.returncode
-            except subprocess.TimeoutExpired:
-                raise RuntimeError(
-                    f"Failed to record audio: ffmpeg timed out after {timeout_sec:.0f}s. "
-                    "RTSP stream may be unreachable or have no audio track."
-                )
-
-            if returncode != 0:
-                stderr_text = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
-                stderr_text = stderr_text.replace(self._stream_username, "***")
-                stderr_text = stderr_text.replace(self._stream_password, "***")
-                stderr_text = stderr_text.replace(self._config.host, "***")
-                raise RuntimeError(
-                    f"ffmpeg exited with code {returncode}: {stderr_text[-500:]}"
-                )
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(process.wait(), timeout=duration + 10.0)
 
             with open(file_path, "rb") as f:
                 audio_data = f.read()
@@ -684,13 +683,8 @@ class TapoCamera:
                 duration=duration,
                 transcript=transcript,
             )
-        except FileNotFoundError:
-            raise RuntimeError(
-                "Failed to record audio: ffmpeg not found in PATH. "
-                "Please install ffmpeg."
-            )
         except Exception as e:
-            raise RuntimeError(f"Failed to record audio ({type(e).__name__}): {e!s}") from e
+            raise RuntimeError(f"Failed to record audio: {e!s}") from e
 
     async def _transcribe_audio(self, audio_path: str) -> str | None:
         """Transcribe audio file using OpenAI Whisper.
@@ -707,13 +701,8 @@ class TapoCamera:
             return "[Whisper not installed. Run: pip install openai-whisper]"
 
         try:
-            if self._whisper_model is None:
-                self._whisper_model = await asyncio.to_thread(
-                    whisper.load_model, "tiny"
-                )
-            result = await asyncio.to_thread(
-                self._whisper_model.transcribe, audio_path, language="ja"
-            )
+            model = await asyncio.to_thread(whisper.load_model, "base")
+            result = await asyncio.to_thread(model.transcribe, audio_path, language="ja")
             return result.get("text", "").strip()
         except Exception as e:
             return f"[Transcription failed: {e!s}]"
