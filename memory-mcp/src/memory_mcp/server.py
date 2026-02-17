@@ -435,6 +435,12 @@ class MemoryMCPServer:
                                 "minimum": 1,
                                 "maximum": 5,
                             },
+                            "resolution": {
+                                "type": "string",
+                                "description": "Image resolution for memory storage: 'low' (160x120), 'medium' (320x240, default), 'high' (640x480)",
+                                "default": "medium",
+                                "enum": ["low", "medium", "high"],
+                            },
                         },
                         "required": ["content", "image_path", "camera_position"],
                     },
@@ -663,11 +669,17 @@ class MemoryMCPServer:
                         output_lines = [f"Found {len(results)} memories:\n"]
                         for i, result in enumerate(results, 1):
                             m = result.memory
+                            image_line = ""
+                            for sd in m.sensory_data:
+                                if sd.sensory_type == "visual" and sd.image_data:
+                                    image_line = f"Image: data:image/jpeg;base64,{sd.image_data}\n"
+                                    break
                             output_lines.append(
                                 f"--- Memory {i} (distance: {result.distance:.4f}) ---\n"
                                 f"ID: {m.id}\n"
                                 f"[{m.timestamp}] [{m.emotion}] [{m.category}] (importance: {m.importance})\n"
                                 f"{m.content}\n"
+                                f"{image_line}"
                             )
 
                         return [TextContent(type="text", text="\n".join(output_lines))]
@@ -688,11 +700,17 @@ class MemoryMCPServer:
                         output_lines = [f"Recalled {len(results)} relevant memories:\n"]
                         for i, result in enumerate(results, 1):
                             m = result.memory
+                            image_line = ""
+                            for sd in m.sensory_data:
+                                if sd.sensory_type == "visual" and sd.image_data:
+                                    image_line = f"Image: data:image/jpeg;base64,{sd.image_data}\n"
+                                    break
                             output_lines.append(
                                 f"--- Memory {i} ---\n"
                                 f"ID: {m.id}\n"
                                 f"[{m.timestamp}] [{m.emotion}]\n"
                                 f"{m.content}\n"
+                                f"{image_line}"
                             )
 
                         return [TextContent(type="text", text="\n".join(output_lines))]
@@ -1000,6 +1018,7 @@ Date Range:
                             camera_position=camera_position,
                             emotion=arguments.get("emotion", "neutral"),
                             importance=arguments.get("importance", 3),
+                            resolution=arguments.get("resolution"),
                         )
 
                         return [
@@ -1079,12 +1098,19 @@ Date Range:
                         ]
                         for i, m in enumerate(memories, 1):
                             cam_pos = f"pan={m.camera_position.pan_angle}°, tilt={m.camera_position.tilt_angle}°" if m.camera_position else "N/A"
+                            # 視覚記憶のimage_dataを探す
+                            image_line = ""
+                            for sd in m.sensory_data:
+                                if sd.sensory_type == "visual" and sd.image_data:
+                                    image_line = f"Image: data:image/jpeg;base64,{sd.image_data}\n"
+                                    break
                             output_lines.append(
                                 f"--- Memory {i} ---\n"
                                 f"Time: {m.timestamp}\n"
                                 f"Content: {m.content}\n"
                                 f"Camera: {cam_pos}\n"
                                 f"Emotion: {m.emotion} | Importance: {m.importance}\n"
+                                f"{image_line}"
                             )
 
                         return [TextContent(type="text", text="\n".join(output_lines))]

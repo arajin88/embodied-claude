@@ -22,7 +22,7 @@
       "env": {
         "GO2RTC_URL": "http://localhost:1984",
         "GO2RTC_STREAM": "tapo_cam",
-        "ELEVENLABS_PLAYBACK": "none"
+        "ELEVENLABS_PLAYBACK": "auto"
       }
     }
   }

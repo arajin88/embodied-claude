@@ -3,6 +3,7 @@
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
+from .image_utils import encode_image_for_memory, resolve_resolution
 from .types import CameraPosition, Memory, SensoryData
 
 if TYPE_CHECKING:
@@ -33,8 +34,9 @@ class SensoryIntegration:
         importance: int = 3,
         category: str = "observation",
         auto_describe: bool = False,
+        resolution: str | None = None,
     ) -> Memory:
-        """視覚記憶を保存（画像パス + カメラ位置）.
+        """視覚記憶を保存（画像パス + カメラ位置 + base64画像）.
 
         Args:
             content: 記憶の内容（例: "朝の空を見つけた"）
@@ -44,10 +46,17 @@ class SensoryIntegration:
             importance: 重要度（1-5）
             category: カテゴリ
             auto_describe: 画像説明を自動生成（Phase 4.3では未実装）
+            resolution: 画像解像度プリセット ("low"/"medium"/"high", デフォルト: "medium")
 
         Returns:
             保存された記憶
         """
+        # 画像をリサイズ＆base64エンコード
+        max_width, max_height = resolve_resolution(resolution)
+        image_data = encode_image_for_memory(
+            image_path, max_width=max_width, max_height=max_height
+        )
+
         # 感覚データを作成
         sensory_data = SensoryData(
             sensory_type="visual",
@@ -57,6 +66,7 @@ class SensoryIntegration:
             },
             description=None,  # Phase 4.3では説明生成なし
             timestamp=datetime.now(timezone.utc).isoformat(),
+            image_data=image_data,
         )
 
         # 記憶を保存（感覚データとカメラ位置を含む）
