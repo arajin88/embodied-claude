@@ -23,7 +23,7 @@ Traditional LLMs were passive — they could only see what was shown to them. Wi
 |------------|-----------|----------|----------|
 | [usb-webcam-mcp](./usb-webcam-mcp/) | Eyes | Capture images from USB camera | nuroum V11 etc. |
 | [wifi-cam-mcp](./wifi-cam-mcp/) | Eyes, Neck, Ears | ONVIF PTZ camera control + speech recognition | TP-Link Tapo C210/C220 etc. |
-| [elevenlabs-t2s-mcp](./elevenlabs-t2s-mcp/) | Voice | Text-to-speech with Audio Tags | ElevenLabs API + go2rtc |
+| [tts-mcp](./tts-mcp/) | Voice | Unified TTS (ElevenLabs + VOICEVOX) | ElevenLabs API / VOICEVOX + go2rtc |
 | [memory-mcp](./memory-mcp/) | Brain | Long-term, visual & episodic memory, ToM | ChromaDB + Pillow |
 | [system-temperature-mcp](./system-temperature-mcp/) | Body temperature | System temperature monitoring | Linux sensors |
 
@@ -47,7 +47,8 @@ Traditional LLMs were passive — they could only see what was shown to them. Wi
 - OpenCV (USB camera)
 - Pillow (visual memory image resize/base64 encoding)
 - OpenAI Whisper (local speech recognition)
-- ElevenLabs API key (text-to-speech)
+- ElevenLabs API key (text-to-speech, optional)
+- VOICEVOX (text-to-speech, free & local, optional)
 - go2rtc (camera speaker output, auto-downloaded)
 
 ## Setup
@@ -114,17 +115,24 @@ cd memory-mcp
 uv sync
 ```
 
-#### elevenlabs-t2s-mcp (Voice)
+#### tts-mcp (Voice)
 
 ```bash
-cd elevenlabs-t2s-mcp
+cd tts-mcp
 uv sync
+
+# For ElevenLabs:
 cp .env.example .env
 # Set ELEVENLABS_API_KEY in .env
+
+# For VOICEVOX (free & local):
+# Docker: docker run -p 50021:50021 voicevox/voicevox_engine:cpu-latest
+# Set VOICEVOX_URL=http://localhost:50021 in .env
+
 # For WSL audio issues:
-# ELEVENLABS_PLAYBACK=paplay
-# ELEVENLABS_PULSE_SINK=1
-# ELEVENLABS_PULSE_SERVER=unix:/mnt/wslg/PulseServer
+# TTS_PLAYBACK=paplay
+# PULSE_SINK=1
+# PULSE_SERVER=unix:/mnt/wslg/PulseServer
 ```
 
 #### system-temperature-mcp (Body Temperature)
@@ -160,11 +168,12 @@ Register MCP servers in `.mcp.json` in your working directory:
       "command": "uv",
       "args": ["run", "--directory", "/path/to/embodied-claude/memory-mcp", "memory-mcp"]
     },
-    "elevenlabs-t2s": {
+    "tts": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/elevenlabs-t2s-mcp", "elevenlabs-t2s"],
+      "args": ["run", "--directory", "/path/to/embodied-claude/tts-mcp", "tts-mcp"],
       "env": {
-        "ELEVENLABS_API_KEY": "your-api-key"
+        "ELEVENLABS_API_KEY": "your-api-key",
+        "VOICEVOX_URL": "http://localhost:50021"
       }
     }
   }
@@ -227,11 +236,11 @@ See each server's README or `list_tools` for full parameter details.
 
 See `wifi-cam-mcp/README.md` for stereo vision / right eye tools.
 
-### elevenlabs-t2s-mcp
+### tts-mcp
 
 | Tool | Description |
 |------|-------------|
-| `say` | Text-to-speech with Audio Tags (e.g. `[excited]`), speaker: camera/local/both |
+| `say` | Text-to-speech (engine: elevenlabs/voicevox, Audio Tags e.g. `[excited]`, speaker: camera/local/both) |
 
 ### memory-mcp
 
