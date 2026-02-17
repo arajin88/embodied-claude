@@ -23,7 +23,7 @@
 |-------------|---------|------|-----------------|
 | [usb-webcam-mcp](./usb-webcam-mcp/) | 目 | USB カメラから画像取得 | nuroum V11 等 |
 | [wifi-cam-mcp](./wifi-cam-mcp/) | 目・首・耳 | ONVIF PTZ カメラ制御 + 音声認識 | TP-Link Tapo C210/C220 等 |
-| [elevenlabs-t2s-mcp](./elevenlabs-t2s-mcp/) | 声 | ElevenLabs で音声合成（Audio Tags対応） | ElevenLabs API + go2rtc |
+| [tts-mcp](./tts-mcp/) | 声 | TTS 統合（ElevenLabs + VOICEVOX） | ElevenLabs API / VOICEVOX + go2rtc |
 | [memory-mcp](./memory-mcp/) | 脳 | 長期記憶・視覚記憶・エピソード記憶・ToM | ChromaDB + Pillow |
 | [system-temperature-mcp](./system-temperature-mcp/) | 体温感覚 | システム温度監視 | Linux sensors |
 
@@ -47,7 +47,8 @@
 - OpenCV（USB カメラ用）
 - Pillow（視覚記憶の画像リサイズ・base64エンコード用）
 - OpenAI Whisper（音声認識用、ローカル実行）
-- ElevenLabs API キー（音声合成用）
+- ElevenLabs API キー（音声合成用、任意）
+- VOICEVOX（音声合成用、無料・ローカル、任意）
 - go2rtc（カメラスピーカー出力用、自動ダウンロード対応）
 
 ## セットアップ
@@ -139,17 +140,26 @@ cd memory-mcp
 uv sync
 ```
 
-#### elevenlabs-t2s-mcp（声）
+#### tts-mcp（声）
 
 ```bash
-cd elevenlabs-t2s-mcp
+cd tts-mcp
 uv sync
+
+# ElevenLabs を使う場合:
 cp .env.example .env
 # .env に ELEVENLABS_API_KEY を設定
+
+# VOICEVOX を使う場合（無料・ローカル）:
+# Docker: docker run -p 50021:50021 voicevox/voicevox_engine:cpu-latest
+# .env に VOICEVOX_URL=http://localhost:50021 を設定
+# VOICEVOX_SPEAKER=3 でデフォルトのキャラを変更可（例: 0=四国めたん, 3=ずんだもん, 8=春日部つむぎ）
+# キャラ一覧: curl http://localhost:50021/speakers
+
 # WSLで音が出ない場合:
-# ELEVENLABS_PLAYBACK=paplay
-# ELEVENLABS_PULSE_SINK=1
-# ELEVENLABS_PULSE_SERVER=unix:/mnt/wslg/PulseServer
+# TTS_PLAYBACK=paplay
+# PULSE_SINK=1
+# PULSE_SERVER=unix:/mnt/wslg/PulseServer
 ```
 
 #### system-temperature-mcp（体温感覚）
@@ -163,38 +173,14 @@ uv sync
 
 ### 3. Claude Code 設定
 
-カレントディレクトリの `.mcp.json` に MCP サーバーを登録：
+テンプレートをコピーして、認証情報を設定：
 
-```json
-{
-  "mcpServers": {
-    "usb-webcam": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/usb-webcam-mcp", "usb-webcam-mcp"]
-    },
-    "wifi-cam": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/wifi-cam-mcp", "wifi-cam-mcp"],
-      "env": {
-        "TAPO_CAMERA_HOST": "192.168.1.xxx",
-        "TAPO_USERNAME": "your-username",
-        "TAPO_PASSWORD": "your-password"
-      }
-    },
-    "memory": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/memory-mcp", "memory-mcp"]
-    },
-    "elevenlabs-t2s": {
-      "command": "uv",
-      "args": ["run", "--directory", "/path/to/embodied-claude/elevenlabs-t2s-mcp", "elevenlabs-t2s"],
-      "env": {
-        "ELEVENLABS_API_KEY": "your-api-key"
-      }
-    }
-  }
-}
+```bash
+cp .mcp.json.example .mcp.json
+# .mcp.json を編集してカメラのIP・パスワード、APIキー等を設定
 ```
+
+設定例は [`.mcp.json.example`](./.mcp.json.example) を参照。
 
 ## 使い方
 
@@ -252,11 +238,11 @@ Claude Code を起動すると、自然言語でカメラを操作できる：
 
 ※ 右目/ステレオ視覚などの追加ツールは `wifi-cam-mcp/README.md` を参照。
 
-### elevenlabs-t2s-mcp
+### tts-mcp
 
 | ツール | 説明 |
 |--------|------|
-| `say` | テキストを音声合成して発話（`[excited]` 等の Audio Tags 対応、speaker: camera/local/both で出力先選択） |
+| `say` | テキストを音声合成して発話（engine: elevenlabs/voicevox、`[excited]` 等の Audio Tags 対応、speaker: camera/local/both で出力先選択） |
 
 ### memory-mcp
 
