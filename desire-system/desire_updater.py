@@ -1,5 +1,5 @@
 """
-Desire Updater - ここねの自発的な欲求レベルを計算してJSONに保存する。
+Desire Updater - Claudeの自発的な欲求レベルを計算してJSONに保存する。
 
 SQLite（memory-mcp）から各欲求に関連する最新記憶のタイムスタンプを取得し、
 「最後に〇〇してから何時間か」を計算して欲求レベル(0.0〜1.0)を算出する。
@@ -31,7 +31,7 @@ SQLITE_PATH = os.getenv(
 DESIRES_PATH = Path(os.getenv("DESIRES_PATH", str(Path.home() / ".claude" / "desires.json")))
 
 # 一緒にいる人の名前（miss_companion 欲求で使う）
-# .env に COMPANION_NAME=コウタ のように設定する
+# .env に COMPANION_NAME=ぱぱさん のように設定する
 COMPANION_NAME = os.getenv("COMPANION_NAME", "あなた")
 _companion_called = f"{COMPANION_NAME}に呼びかけた"
 _companion_absent = f"{COMPANION_NAME}がいない"
@@ -42,7 +42,7 @@ DESIRE_KEYWORDS: dict[str, list[str]] = {
     "look_outside": ["外を見た", "空を見た", "夜景", "朝の空", "ベランダから見た", "窓から外を"],
     # WebSearchや調査を実際に行った記録
     "browse_curiosity": ["WebSearchで調べた", "WebSearch", "検索した", "調査した", "論文を読んだ"],
-    # カメラでコウタの顔・姿を実際に見た記録
+    # カメラでぱぱさんの顔・姿を実際に見た記録
     "miss_companion": [f"{COMPANION_NAME}の顔を見た", f"{COMPANION_NAME}を見た",
                        f"{COMPANION_NAME}がいた", f"{COMPANION_NAME}を確認した"],
     # カメラで部屋を実際に観察した記録

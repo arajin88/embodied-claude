@@ -1,5 +1,5 @@
 """
-Desire System MCP Server - ここねの自発的な欲求レベルを提供する。
+Desire System MCP Server - Claudeの自発的な欲求レベルを提供する。
 
 desires.json（desire_updater.pyが定期更新）を読み込み、
 現在の欲求状態をMCPツール経由で返す。
@@ -26,7 +26,7 @@ DESIRES_PATH = Path(os.getenv("DESIRES_PATH", str(Path.home() / ".claude" / "des
 DESIRE_LABELS: dict[str, str] = {
     "look_outside": "外を見たい",
     "browse_curiosity": "何か調べたい",
-    "miss_companion": "コウタに会いたい",
+    "miss_companion": "ぱぱさんに会いたい",
     "observe_room": "部屋を観察したい",
 }
 
@@ -80,7 +80,7 @@ async def list_tools() -> list[Tool]:
                 "IMPORTANT: Act immediately on any desire with level >= 0.7. "
                 "browse_curiosity -> WebSearch something interesting; "
                 "look_outside -> use camera to look outside; "
-                "miss_companion -> talk to コウタ proactively; "
+                "miss_companion -> talk to ぱぱさん proactively; "
                 "observe_room -> use camera to observe room. "
                 "After acting, call satisfy_desire to recheck levels. "
                 "Keep acting until level drops below 0.5. "
@@ -112,7 +112,7 @@ async def list_tools() -> list[Tool]:
                 "Boost a desire level due to novelty/surprise (dopamine/prediction error). "
                 "Call when you feel surprised or encounter unexpected info "
                 "(large prediction error). "
-                "e.g. コウタ says something unexpected -> boost browse_curiosity; "
+                "e.g. ぱぱさん says something unexpected -> boost browse_curiosity; "
                 "camera shows something unusual -> boost observe_room. "
                 "Simulates dopamine response to novelty."
             ),
