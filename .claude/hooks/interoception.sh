@@ -4,7 +4,7 @@
 # heartbeat-daemon.sh が書き出した state file を読んでコンテキストに注入する
 # 自前で計測せず、読み取り→整形→出力するだけの軽量版
 
-STATE_FILE="${USERPROFILE}/.claude/interoception_state.json"
+STATE_FILE="${USERPROFILE//\\//}/.claude/interoception_state.json"
 
 # state file がなければフォールバック（デーモン未起動時）
 if [ ! -f "$STATE_FILE" ]; then
@@ -16,7 +16,8 @@ if [ ! -f "$STATE_FILE" ]; then
 fi
 
 # state file から読み取って1行に整形
-python3 -c "
+PYTHON="C:/Users/araji/AppData/Local/Programs/Python/Python311/python.exe"
+"$PYTHON" -c "
 import json, sys
 try:
     with open('${STATE_FILE}') as f:
@@ -26,7 +27,7 @@ try:
     window = data.get('window', [])
 
     # トレンド矢印
-    arrows = {'rising': '↑', 'falling': '↓', 'stable': '→'}
+    arrows = {'rising': '+', 'falling': '-', 'stable': '~'}
     ar_arrow = arrows.get(trend.get('arousal', 'stable'), '→')
     mem_arrow = arrows.get(trend.get('mem_free', 'stable'), '→')
 
@@ -54,10 +55,29 @@ try:
         f\"uptime={now.get('uptime_min', '?')}min\",
         f\"heartbeats={len(window)}\",
     ]
+
+    # desires.json を読んで欲求レベルを追加
+    import os
+    desires_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'desires.json')
+    try:
+        with open(desires_path) as f:
+            desires_data = json.load(f)
+        desires = desires_data.get('desires', {})
+        short = {'look_outside': 'outside', 'browse_curiosity': 'browse', 'miss_companion': 'companion', 'observe_room': 'room'}
+        desire_parts = []
+        for key, level in desires.items():
+            label = short.get(key, key)
+            flag = '(!)' if level >= 0.7 else ''
+            desire_parts.append(f\"{label}={level:.2f}{flag}\")
+        if desire_parts:
+            parts.append('desires: ' + ' '.join(desire_parts))
+    except Exception:
+        pass
+
     print('[interoception] ' + ' '.join(parts))
 except Exception as e:
     print(f'[interoception] error reading state: {e}', file=sys.stderr)
     print('[interoception] state_file_error')
-" 2>/dev/null
+"
 
 exit 0
