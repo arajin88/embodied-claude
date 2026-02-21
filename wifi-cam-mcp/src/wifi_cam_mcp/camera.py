@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
+from typing import Any, ClassVar
 
 from PIL import Image
 
@@ -686,8 +687,11 @@ class TapoCamera:
         except Exception as e:
             raise RuntimeError(f"Failed to record audio: {e!s}") from e
 
+    # クラスレベルのモデルキャッシュ（毎回ロードしない）
+    _whisper_model: ClassVar[Any] = None
+
     async def _transcribe_audio(self, audio_path: str) -> str | None:
-        """Transcribe audio file using OpenAI Whisper.
+        """Transcribe audio file using faster-whisper (GPU/CPU auto-detect).
 
         Args:
             audio_path: Path to the audio file
@@ -696,13 +700,29 @@ class TapoCamera:
             Transcribed text or None if transcription fails
         """
         try:
-            import whisper
+            from faster_whisper import WhisperModel
         except ImportError:
-            return "[Whisper not installed. Run: pip install openai-whisper]"
+            return "[faster-whisper not installed. Run: uv sync --extra transcribe]"
 
         try:
-            model = await asyncio.to_thread(whisper.load_model, "base")
-            result = await asyncio.to_thread(model.transcribe, audio_path, language="ja")
-            return result.get("text", "").strip()
+            def _load_and_transcribe() -> str:
+                if TapoCamera._whisper_model is None:
+                    # GPU（CUDA）が使えれば float16、なければ CPU int8
+                    try:
+                        import ctranslate2
+                        device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+                    except Exception:
+                        device = "cpu"
+                    compute_type = "float16" if device == "cuda" else "int8"
+                    logger.info(
+                        "Loading faster-whisper (device=%s, compute=%s)", device, compute_type
+                    )
+                    TapoCamera._whisper_model = WhisperModel(
+                        "base", device=device, compute_type=compute_type
+                    )
+                segments, _ = TapoCamera._whisper_model.transcribe(audio_path, language="ja")
+                return " ".join(seg.text for seg in segments).strip()
+
+            return await asyncio.to_thread(_load_and_transcribe)
         except Exception as e:
             return f"[Transcription failed: {e!s}]"

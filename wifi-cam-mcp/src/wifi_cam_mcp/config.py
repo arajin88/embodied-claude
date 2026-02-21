@@ -41,8 +41,12 @@ class CameraConfig:
             os.getenv(f"{prefix}_ONVIF_PORT", "") or os.getenv("TAPO_ONVIF_PORT", "") or "2020"
         )
         stream_url = os.getenv(f"{prefix}_STREAM_URL") or os.getenv("TAPO_STREAM_URL")
-        stream_username = os.getenv(f"{prefix}_STREAM_USERNAME") or os.getenv("TAPO_STREAM_USERNAME")
-        stream_password = os.getenv(f"{prefix}_STREAM_PASSWORD") or os.getenv("TAPO_STREAM_PASSWORD")
+        stream_username = (
+            os.getenv(f"{prefix}_STREAM_USERNAME") or os.getenv("TAPO_STREAM_USERNAME")
+        )
+        stream_password = (
+            os.getenv(f"{prefix}_STREAM_PASSWORD") or os.getenv("TAPO_STREAM_PASSWORD")
+        )
         mount_mode = (
             os.getenv(f"{prefix}_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
         ).lower()
@@ -89,8 +93,12 @@ class CameraConfig:
             os.getenv("TAPO_RIGHT_ONVIF_PORT", "") or os.getenv("TAPO_ONVIF_PORT", "") or "2020"
         )
         stream_url = os.getenv("TAPO_RIGHT_STREAM_URL")
-        stream_username = os.getenv("TAPO_RIGHT_STREAM_USERNAME") or os.getenv("TAPO_STREAM_USERNAME")
-        stream_password = os.getenv("TAPO_RIGHT_STREAM_PASSWORD") or os.getenv("TAPO_STREAM_PASSWORD")
+        stream_username = (
+            os.getenv("TAPO_RIGHT_STREAM_USERNAME") or os.getenv("TAPO_STREAM_USERNAME")
+        )
+        stream_password = (
+            os.getenv("TAPO_RIGHT_STREAM_PASSWORD") or os.getenv("TAPO_STREAM_PASSWORD")
+        )
         mount_mode = (
             os.getenv("TAPO_RIGHT_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
         ).lower()
