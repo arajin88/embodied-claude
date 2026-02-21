@@ -1329,6 +1329,16 @@ Date Range:
 
 def main() -> None:
     """Entry point for the MCP server."""
+    # asyncio 起動前にメインスレッドでモデルをプリロード。
+    # Windows では asyncio.to_thread() 内での PyTorch/OpenMP 初期化がハングする場合があるため。
+    from .config import MemoryConfig
+    from .embedding import E5EmbeddingFunction
+
+    config = MemoryConfig.from_env()
+    _preload_fn = E5EmbeddingFunction(config.embedding_model)
+    _preload_fn._load_model()
+    logger.info("Embedding model pre-loaded in main thread.")
+
     server = MemoryMCPServer()
     asyncio.run(server.run())
 
