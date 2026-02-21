@@ -1,7 +1,7 @@
 """
 Desire Updater - ここねの自発的な欲求レベルを計算してJSONに保存する。
 
-ChromaDB（memory-mcp）から各欲求に関連する最新記憶のタイムスタンプを取得し、
+SQLite（memory-mcp）から各欲求に関連する最新記憶のタイムスタンプを取得し、
 「最後に〇〇してから何時間か」を計算して欲求レベル(0.0〜1.0)を算出する。
 
 cronで5分ごとに実行:
@@ -12,21 +12,20 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-import chromadb
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# ChromaDB設定
-CHROMA_PATH = os.getenv(
+# SQLite設定
+SQLITE_PATH = os.getenv(
     "MEMORY_DB_PATH",
-    str(Path.home() / ".claude" / "memories" / "chroma"),
+    str(Path.home() / ".claude" / "memories" / "memory.db"),
 )
-COLLECTION_NAME = os.getenv("MEMORY_COLLECTION_NAME", "claude_memories")
 
 # 欲求レベル出力先
 DESIRES_PATH = Path(os.getenv("DESIRES_PATH", str(Path.home() / ".claude" / "desires.json")))
@@ -76,29 +75,23 @@ class DesireState:
 
 
 def get_latest_memory_timestamp(
-    collection: chromadb.Collection,
+    conn: sqlite3.Connection,
     keywords: list[str],
 ) -> datetime | None:
     """
     キーワードに一致する最新記憶のタイムスタンプを返す。
     一致なければ None。
     """
-    # 全記憶からキーワード検索（ChromaDBのwhere filterはfull-textを直接サポートしないので
-    # 少量取得してPython側でフィルタする）
     try:
-        results = collection.get(
-            limit=500,
-            include=["documents", "metadatas"],
-        )
+        cursor = conn.execute("SELECT content, timestamp FROM memories")
     except Exception:
         return None
 
     latest: datetime | None = None
 
-    for doc, meta in zip(results["documents"], results["metadatas"]):
+    for doc, ts_str in cursor:
         if not any(kw in doc for kw in keywords):
             continue
-        ts_str = meta.get("timestamp", "")
         if not ts_str:
             continue
         try:
@@ -136,7 +129,7 @@ def calculate_desire_level(
 
 
 def compute_desires(
-    collection: chromadb.Collection,
+    conn: sqlite3.Connection,
     now: datetime | None = None,
 ) -> DesireState:
     """全欲求レベルを計算してDesireStateを返す。"""
@@ -146,7 +139,7 @@ def compute_desires(
     desires: dict[str, float] = {}
 
     for desire_name, keywords in DESIRE_KEYWORDS.items():
-        last_ts = get_latest_memory_timestamp(collection, keywords)
+        last_ts = get_latest_memory_timestamp(conn, keywords)
         level = calculate_desire_level(
             last_ts,
             SATISFACTION_HOURS[desire_name],
@@ -190,13 +183,16 @@ def load_desires(path: Path = DESIRES_PATH) -> DesireState | None:
 def main() -> None:
     """メインエントリポイント（cronから呼ばれる）。"""
     try:
-        client = chromadb.PersistentClient(path=CHROMA_PATH)
-        collection = client.get_or_create_collection(COLLECTION_NAME)
+        conn = sqlite3.connect(SQLITE_PATH)
     except Exception as e:
-        print(f"[desire-updater] ChromaDB接続エラー: {e}")
+        print(f"[desire-updater] SQLite接続エラー: {e}")
         return
 
-    state = compute_desires(collection)
+    try:
+        state = compute_desires(conn)
+    finally:
+        conn.close()
+
     save_desires(state)
     print(
         f"[desire-updater] 更新完了: dominant={state.dominant} "

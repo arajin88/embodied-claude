@@ -1,10 +1,10 @@
 """Tests for desire_updater."""
 
 import json
+import sqlite3
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -16,6 +16,16 @@ from desire_updater import (
     load_desires,
     save_desires,
 )
+
+
+def _make_conn(docs: list[str], timestamps: list[str]) -> sqlite3.Connection:
+    """インメモリSQLiteに memories テーブルを作ってデータを挿入する。"""
+    conn = sqlite3.connect(":memory:")
+    conn.execute("CREATE TABLE memories (content TEXT, timestamp TEXT)")
+    for doc, ts in zip(docs, timestamps):
+        conn.execute("INSERT INTO memories VALUES (?, ?)", (doc, ts))
+    conn.commit()
+    return conn
 
 
 class TestCalculateDesireLevel:
@@ -57,57 +67,40 @@ class TestCalculateDesireLevel:
 
 
 class TestGetLatestMemoryTimestamp:
-    def _make_collection(self, docs, metas):
-        coll = MagicMock()
-        coll.get.return_value = {"documents": docs, "metadatas": metas}
-        return coll
-
     def test_returns_none_when_no_match(self):
-        coll = self._make_collection(
+        conn = _make_conn(
             ["今日は晴れです", "部屋が暑い"],
-            [
-                {"timestamp": "2026-02-18T10:00:00"},
-                {"timestamp": "2026-02-18T11:00:00"},
-            ],
+            ["2026-02-18T10:00:00", "2026-02-18T11:00:00"],
         )
-        result = get_latest_memory_timestamp(coll, ["外を見た", "空を見た"])
+        result = get_latest_memory_timestamp(conn, ["外を見た", "空を見た"])
         assert result is None
 
     def test_returns_latest_matching_timestamp(self):
-        coll = self._make_collection(
+        conn = _make_conn(
             ["外を見た、空が青い", "今日は雨", "空を見た、曇ってる"],
-            [
-                {"timestamp": "2026-02-18T08:00:00"},
-                {"timestamp": "2026-02-18T09:00:00"},
-                {"timestamp": "2026-02-18T10:00:00"},  # 最新
-            ],
+            ["2026-02-18T08:00:00", "2026-02-18T09:00:00", "2026-02-18T10:00:00"],
         )
-        result = get_latest_memory_timestamp(coll, ["外を見た", "空を見た"])
+        result = get_latest_memory_timestamp(conn, ["外を見た", "空を見た"])
         assert result is not None
         assert result.hour == 10
 
     def test_handles_missing_timestamp_in_meta(self):
-        coll = self._make_collection(
-            ["外を見た"],
-            [{"timestamp": ""}],  # タイムスタンプなし
-        )
-        result = get_latest_memory_timestamp(coll, ["外を見た"])
+        conn = _make_conn(["外を見た"], [""])  # タイムスタンプなし
+        result = get_latest_memory_timestamp(conn, ["外を見た"])
         assert result is None
 
     def test_handles_collection_error(self):
-        coll = MagicMock()
-        coll.get.side_effect = Exception("DB error")
-        result = get_latest_memory_timestamp(coll, ["外を見た"])
+        conn = sqlite3.connect(":memory:")  # テーブルなし → OperationalError
+        result = get_latest_memory_timestamp(conn, ["外を見た"])
         assert result is None
 
 
 class TestComputeDesires:
     def test_all_desires_computed(self):
-        coll = MagicMock()
-        coll.get.return_value = {"documents": [], "metadatas": []}
+        conn = _make_conn([], [])
         now = datetime(2026, 2, 18, 12, 0, 0, tzinfo=timezone.utc)
 
-        state = compute_desires(coll, now)
+        state = compute_desires(conn, now)
 
         assert set(state.desires.keys()) == {
             "look_outside",
@@ -117,38 +110,32 @@ class TestComputeDesires:
         }
 
     def test_all_max_when_no_memories(self):
-        coll = MagicMock()
-        coll.get.return_value = {"documents": [], "metadatas": []}
+        conn = _make_conn([], [])
         now = datetime(2026, 2, 18, 12, 0, 0, tzinfo=timezone.utc)
 
-        state = compute_desires(coll, now)
+        state = compute_desires(conn, now)
 
         for level in state.desires.values():
             assert level == 1.0
 
     def test_dominant_is_highest_desire(self):
         # look_outside だけ最近満たされてる
-        coll = MagicMock()
         now = datetime(2026, 2, 18, 12, 0, 0, tzinfo=timezone.utc)
         recent = (now - timedelta(minutes=5)).isoformat()
 
-        coll.get.return_value = {
-            "documents": ["外を見た、空が青い"],
-            "metadatas": [{"timestamp": recent}],
-        }
+        conn = _make_conn(["外を見た、空が青い"], [recent])
 
-        state = compute_desires(coll, now)
+        state = compute_desires(conn, now)
 
         # look_outside だけ低いはずなので dominant は他のどれか
         assert state.dominant != "look_outside"
         assert state.desires["look_outside"] < state.desires["miss_companion"]
 
     def test_desires_values_in_range(self):
-        coll = MagicMock()
-        coll.get.return_value = {"documents": [], "metadatas": []}
+        conn = _make_conn([], [])
         now = datetime(2026, 2, 18, 12, 0, 0, tzinfo=timezone.utc)
 
-        state = compute_desires(coll, now)
+        state = compute_desires(conn, now)
 
         for level in state.desires.values():
             assert 0.0 <= level <= 1.0
