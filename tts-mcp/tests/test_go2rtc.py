@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from elevenlabs_t2s_mcp.go2rtc import (
+from tts_mcp.go2rtc import (
     Go2RTCProcess,
     detect_platform,
     ensure_binary,
@@ -16,25 +16,25 @@ from elevenlabs_t2s_mcp.go2rtc import (
 class TestDetectPlatform:
     """Tests for platform detection."""
 
-    @patch("elevenlabs_t2s_mcp.go2rtc.platform")
+    @patch("tts_mcp.go2rtc.platform")
     def test_linux_amd64(self, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_platform.machine.return_value = "x86_64"
         assert detect_platform() == "go2rtc_linux_amd64"
 
-    @patch("elevenlabs_t2s_mcp.go2rtc.platform")
+    @patch("tts_mcp.go2rtc.platform")
     def test_linux_arm64(self, mock_platform):
         mock_platform.system.return_value = "Linux"
         mock_platform.machine.return_value = "aarch64"
         assert detect_platform() == "go2rtc_linux_arm64"
 
-    @patch("elevenlabs_t2s_mcp.go2rtc.platform")
+    @patch("tts_mcp.go2rtc.platform")
     def test_darwin_arm64(self, mock_platform):
         mock_platform.system.return_value = "Darwin"
         mock_platform.machine.return_value = "arm64"
         assert detect_platform() == "go2rtc_mac_arm64"
 
-    @patch("elevenlabs_t2s_mcp.go2rtc.platform")
+    @patch("tts_mcp.go2rtc.platform")
     def test_unsupported_platform(self, mock_platform):
         mock_platform.system.return_value = "FreeBSD"
         mock_platform.machine.return_value = "sparc64"
@@ -51,10 +51,10 @@ class TestEnsureBinary:
         result = ensure_binary(bin_path)
         assert result == bin_path
 
-    @patch("elevenlabs_t2s_mcp.go2rtc._get_download_url")
-    @patch("elevenlabs_t2s_mcp.go2rtc._download_file")
-    @patch("elevenlabs_t2s_mcp.go2rtc.detect_platform")
-    @patch("elevenlabs_t2s_mcp.go2rtc.platform")
+    @patch("tts_mcp.go2rtc._get_download_url")
+    @patch("tts_mcp.go2rtc._download_file")
+    @patch("tts_mcp.go2rtc.detect_platform")
+    @patch("tts_mcp.go2rtc.platform")
     def test_download_linux_binary(
         self, mock_platform, mock_detect, mock_download, mock_url, tmp_path
     ):
@@ -133,7 +133,7 @@ class TestGo2RTCProcess:
         )
         assert proc.is_running() is False
 
-    @patch("elevenlabs_t2s_mcp.go2rtc.urllib.request.urlopen")
+    @patch("tts_mcp.go2rtc.urllib.request.urlopen")
     def test_is_running_returns_true_when_api_responds(self, mock_urlopen):
         mock_urlopen.return_value.__enter__ = MagicMock()
         mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)

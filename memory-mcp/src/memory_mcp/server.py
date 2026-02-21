@@ -435,6 +435,12 @@ class MemoryMCPServer:
                                 "minimum": 1,
                                 "maximum": 5,
                             },
+                            "resolution": {
+                                "type": "string",
+                                "description": "Image resolution for memory storage: 'low' (160x120), 'medium' (320x240, default), 'high' (640x480)",
+                                "default": "medium",
+                                "enum": ["low", "medium", "high"],
+                            },
                         },
                         "required": ["content", "image_path", "camera_position"],
                     },
@@ -663,11 +669,17 @@ class MemoryMCPServer:
                         output_lines = [f"Found {len(results)} memories:\n"]
                         for i, result in enumerate(results, 1):
                             m = result.memory
+                            image_line = ""
+                            for sd in m.sensory_data:
+                                if sd.sensory_type == "visual" and sd.image_data:
+                                    image_line = f"Image: data:image/jpeg;base64,{sd.image_data}\n"
+                                    break
                             output_lines.append(
                                 f"--- Memory {i} (distance: {result.distance:.4f}) ---\n"
                                 f"ID: {m.id}\n"
                                 f"[{m.timestamp}] [{m.emotion}] [{m.category}] (importance: {m.importance})\n"
                                 f"{m.content}\n"
+                                f"{image_line}"
                             )
 
                         return [TextContent(type="text", text="\n".join(output_lines))]
@@ -688,11 +700,17 @@ class MemoryMCPServer:
                         output_lines = [f"Recalled {len(results)} relevant memories:\n"]
                         for i, result in enumerate(results, 1):
                             m = result.memory
+                            image_line = ""
+                            for sd in m.sensory_data:
+                                if sd.sensory_type == "visual" and sd.image_data:
+                                    image_line = f"Image: data:image/jpeg;base64,{sd.image_data}\n"
+                                    break
                             output_lines.append(
                                 f"--- Memory {i} ---\n"
                                 f"ID: {m.id}\n"
                                 f"[{m.timestamp}] [{m.emotion}]\n"
                                 f"{m.content}\n"
+                                f"{image_line}"
                             )
 
                         return [TextContent(type="text", text="\n".join(output_lines))]
@@ -832,7 +850,7 @@ Date Range:
                         ]
 
                     case "consolidate_memories":
-                        stats = await self._memory_store.consolidate_memories(
+                        consolidation_stats = await self._memory_store.consolidate_memories(
                             window_hours=arguments.get("window_hours", 24),
                             max_replay_events=arguments.get("max_replay_events", 200),
                             link_update_strength=arguments.get("link_update_strength", 0.2),
@@ -842,7 +860,7 @@ Date Range:
                             TextContent(
                                 type="text",
                                 text="Consolidation completed:\n"
-                                f"{json.dumps(stats, indent=2, ensure_ascii=False)}",
+                                f"{json.dumps(consolidation_stats, indent=2, ensure_ascii=False)}",
                             )
                         ]
 
@@ -1000,6 +1018,7 @@ Date Range:
                             camera_position=camera_position,
                             emotion=arguments.get("emotion", "neutral"),
                             importance=arguments.get("importance", 3),
+                            resolution=arguments.get("resolution"),
                         )
 
                         return [
@@ -1079,12 +1098,19 @@ Date Range:
                         ]
                         for i, m in enumerate(memories, 1):
                             cam_pos = f"pan={m.camera_position.pan_angle}°, tilt={m.camera_position.tilt_angle}°" if m.camera_position else "N/A"
+                            # 視覚記憶のimage_dataを探す
+                            image_line = ""
+                            for sd in m.sensory_data:
+                                if sd.sensory_type == "visual" and sd.image_data:
+                                    image_line = f"Image: data:image/jpeg;base64,{sd.image_data}\n"
+                                    break
                             output_lines.append(
                                 f"--- Memory {i} ---\n"
                                 f"Time: {m.timestamp}\n"
                                 f"Content: {m.content}\n"
                                 f"Camera: {cam_pos}\n"
                                 f"Emotion: {m.emotion} | Importance: {m.importance}\n"
+                                f"{image_line}"
                             )
 
                         return [TextContent(type="text", text="\n".join(output_lines))]
@@ -1209,15 +1235,15 @@ Date Range:
                         person = arguments.get("person", "コウタ")
 
                         # Pull relevant memories: personality, communication patterns
-                        memories = await self._memory_store.recall(
+                        tom_memories = await self._memory_store.recall(
                             context=f"{person} コミュニケーション 性格 会話パターン {situation}",
                             n_results=5,
                         )
 
                         memory_context = ""
-                        if memories:
+                        if tom_memories:
                             memory_lines = []
-                            for r in memories:
+                            for r in tom_memories:
                                 m = r.memory
                                 memory_lines.append(
                                     f"- [{m.emotion}] {m.content}"
@@ -1267,8 +1293,7 @@ Date Range:
         logger.info(f"Connected to memory store at {config.db_path}")
 
         # Phase 4.2: Initialize episode manager
-        episodes_collection = self._memory_store.get_episodes_collection()
-        self._episode_manager = EpisodeManager(self._memory_store, episodes_collection)
+        self._episode_manager = EpisodeManager(self._memory_store)
         logger.info("Episode manager initialized")
 
         # Phase 4.3: Initialize sensory integration
