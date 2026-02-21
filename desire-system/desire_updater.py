@@ -39,7 +39,7 @@ _companion_absent = f"{COMPANION_NAME}がいない"
 # 欲求ごとの検索キーワード（記憶のcontentから最新タイムスタンプを探す）
 DESIRE_KEYWORDS: dict[str, list[str]] = {
     # カメラで外・空を実際に見た記録
-    "look_outside": ["外を見た", "空を見た", "夜景", "朝の空", "ベランダから見た", "窓から外を"],
+    "look_outside": ["外を見た", "空を見た", "夜景", "朝の空", "ベランダから見た"],
     # WebSearchや調査を実際に行った記録
     "browse_curiosity": ["WebSearchで調べた", "WebSearch", "検索した", "調査した", "論文を読んだ"],
     # カメラでぱぱさんの顔・姿を実際に見た記録
