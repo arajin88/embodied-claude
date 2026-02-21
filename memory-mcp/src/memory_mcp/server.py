@@ -600,8 +600,8 @@ class MemoryMCPServer:
                             },
                             "person": {
                                 "type": "string",
-                                "description": "Who you are talking to (default: コウタ)",
-                                "default": "コウタ",
+                                "description": "Who you are talking to (default: ぱぱさん)",
+                                "default": "ぱぱさん",
                             },
                         },
                         "required": ["situation"],
@@ -1232,7 +1232,7 @@ Date Range:
                         if not situation:
                             return [TextContent(type="text", text="Error: situation is required")]
 
-                        person = arguments.get("person", "コウタ")
+                        person = arguments.get("person", "ぱぱさん")
 
                         # Pull relevant memories: personality, communication patterns
                         tom_memories = await self._memory_store.recall(
