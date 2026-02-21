@@ -748,8 +748,41 @@ class CameraMCPServer:
             await self.disconnect_camera()
 
 
+def _preload_whisper() -> None:
+    """Preload faster-whisper model before asyncio starts.
+
+    This prevents the model's tqdm progress bar from being written to stderr
+    during listen() calls, which would cause a pipe buffer deadlock in asyncio
+    worker threads (same issue as memory-mcp embedding model).
+    """
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError:
+        return  # faster-whisper not installed, skip
+
+    import os
+
+    import ctranslate2
+
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+
+    try:
+        device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+    except Exception:
+        device = "cpu"
+    compute_type = "float16" if device == "cuda" else "int8"
+
+    from .camera import TapoCamera
+
+    if TapoCamera._whisper_model is None:
+        TapoCamera._whisper_model = WhisperModel(
+            "base", device=device, compute_type=compute_type, local_files_only=True
+        )
+
+
 def main() -> None:
     """Entry point for the MCP server."""
+    _preload_whisper()
     server = CameraMCPServer()
     asyncio.run(server.run())
 

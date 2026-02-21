@@ -661,12 +661,25 @@ class TapoCamera:
                 file_path,
             ]
 
-            process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            await asyncio.wait_for(process.wait(), timeout=duration + 10.0)
+            def _run_ffmpeg() -> tuple[int, str]:
+                import subprocess as _sp
+
+                result = _sp.run(
+                    cmd,
+                    stdin=_sp.DEVNULL,
+                    stdout=_sp.DEVNULL,
+                    stderr=_sp.PIPE,
+                    timeout=duration + 10.0,
+                )
+                stderr_text = (
+                    result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+                )
+                return result.returncode, stderr_text
+
+            returncode, stderr_text = await asyncio.to_thread(_run_ffmpeg)
+
+            if returncode != 0:
+                raise RuntimeError(f"ffmpeg failed (rc={returncode}): {stderr_text[-500:]}")
 
             with open(file_path, "rb") as f:
                 audio_data = f.read()
