@@ -1,9 +1,6 @@
 # Embodied Claude
 
-[![CI](https://github.com/kmizu/embodied-claude/actions/workflows/ci.yml/badge.svg)](https://github.com/kmizu/embodied-claude/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-**[English README is here](./README_en.md)**
+※kmizuさんのものをそのまま載せています。
 
 <blockquote class="twitter-tweet"><p lang="ja" dir="ltr">さすがに室外機はお気に召さないらしい <a href="https://t.co/kSDPl4LvB3">pic.twitter.com/kSDPl4LvB3</a></p>&mdash; kmizu (@kmizu) <a href="https://twitter.com/kmizu/status/2019054065808732201?ref_src=twsrc%5Etfw">February 4, 2026</a></blockquote>
 
@@ -23,16 +20,34 @@
 |-------------|---------|------|-----------------|
 | [usb-webcam-mcp](./usb-webcam-mcp/) | 目 | USB カメラから画像取得 | nuroum V11 等 |
 | [wifi-cam-mcp](./wifi-cam-mcp/) | 目・首・耳 | ONVIF PTZ カメラ制御 + 音声認識 | TP-Link Tapo C210/C220 等 |
-| [tts-mcp](./tts-mcp/) | 声 | TTS 統合（ElevenLabs + VOICEVOX） | ElevenLabs API / VOICEVOX + go2rtc |
-| [memory-mcp](./memory-mcp/) | 脳 | 長期記憶・視覚記憶・エピソード記憶・ToM | SQLite + numpy + Pillow |
+| [elevenlabs-t2s-mcp](./elevenlabs-t2s-mcp/) | 声 | ElevenLabs で音声合成（Audio Tags対応） | ElevenLabs API + go2rtc |
+| [memory-mcp](./memory-mcp/) | 脳 | 長期記憶（セマンティック検索） | ChromaDB |
 | [system-temperature-mcp](./system-temperature-mcp/) | 体温感覚 | システム温度監視 | Linux sensors |
-| [mobility-mcp](./mobility-mcp/) | 足 | ロボット掃除機を足として使う（Tuya制御） | VersLife L6 等 Tuya 対応ロボット掃除機（約12,000円〜） |
 
 ## アーキテクチャ
 
-<p align="center">
-  <img src="docs/architecture.svg" alt="Architecture" width="100%">
-</p>
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Claude Code                              │
+│                    (MCP Client / AI Brain)                      │
+└─────────────────────────┬───────────────────────────────────────┘
+                          │ MCP Protocol (stdio)
+          ┌───────────────┼───────────────┬───────────────┐
+          │               │               │               │
+          ▼               ▼               ▼               ▼
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│ usb-webcam  │   │  wifi-cam   │   │   memory    │   │   system    │
+│    -mcp     │   │    -mcp     │   │    -mcp     │   │ temperature │
+│             │   │             │   │             │   │    -mcp     │
+│   (目)      │   │ (目/首/耳)  │   │   (脳)      │   │ (体温感覚)  │
+└──────┬──────┘   └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
+       │                 │                 │                 │
+       ▼                 ▼                 ▼                 ▼
+┌─────────────┐   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
+│ USB Webcam  │   │ Tapo Camera │   │  ChromaDB   │   │Linux Sensors│
+│ (nuroum V11)│   │  (C210等)   │   │  (Vector)   │   │(/sys/class) │
+└─────────────┘   └─────────────┘   └─────────────┘   └─────────────┘
+```
 
 ## 必要なもの
 
@@ -40,18 +55,13 @@
 - **USB ウェブカメラ**（任意）: nuroum V11 等
 - **Wi-Fi PTZ カメラ**（推奨）: TP-Link Tapo C210 または C220（約3,980円）
 - **GPU**（音声認識用）: NVIDIA GPU（Whisper用、GeForceシリーズのVRAM 8GB以上のグラボ推奨）
-- **Tuya対応ロボット掃除機**（足・移動用、任意）: VersLife L6 等（約12,000円〜）
 
 ### ソフトウェア
 - Python 3.10+
 - uv（Python パッケージマネージャー）
-- ffmpeg 5+（画像・音声キャプチャ用）
+- ffmpeg（画像・音声キャプチャ用）
 - OpenCV（USB カメラ用）
-- Pillow（視覚記憶の画像リサイズ・base64エンコード用）
-- OpenAI Whisper（音声認識用、ローカル実行）
-- ElevenLabs API キー（音声合成用、任意）
-- VOICEVOX（音声合成用、無料・ローカル、任意）
-- go2rtc（カメラスピーカー出力用、自動ダウンロード対応）
+- ElevenLabs API キー（音声合成用）
 
 ## セットアップ
 
@@ -142,26 +152,17 @@ cd memory-mcp
 uv sync
 ```
 
-#### tts-mcp（声）
+#### elevenlabs-t2s-mcp（声）
 
 ```bash
-cd tts-mcp
+cd elevenlabs-t2s-mcp
 uv sync
-
-# ElevenLabs を使う場合:
 cp .env.example .env
 # .env に ELEVENLABS_API_KEY を設定
-
-# VOICEVOX を使う場合（無料・ローカル）:
-# Docker: docker run -p 50021:50021 voicevox/voicevox_engine:cpu-latest
-# .env に VOICEVOX_URL=http://localhost:50021 を設定
-# VOICEVOX_SPEAKER=3 でデフォルトのキャラを変更可（例: 0=四国めたん, 3=ずんだもん, 8=春日部つむぎ）
-# キャラ一覧: curl http://localhost:50021/speakers
-
 # WSLで音が出ない場合:
-# TTS_PLAYBACK=paplay
-# PULSE_SINK=1
-# PULSE_SERVER=unix:/mnt/wslg/PulseServer
+# ELEVENLABS_PLAYBACK=paplay
+# ELEVENLABS_PULSE_SINK=1
+# ELEVENLABS_PULSE_SERVER=unix:/mnt/wslg/PulseServer
 ```
 
 #### system-temperature-mcp（体温感覚）
@@ -173,48 +174,40 @@ uv sync
 
 > **注意**: WSL2 環境では温度センサーにアクセスできないため動作しません。
 
-#### mobility-mcp（足）
-
-Tuya 対応ロボット掃除機を「足」として使い、部屋を移動できます。
-
-```bash
-cd mobility-mcp
-uv sync
-
-cp .env.example .env
-# .env に以下を設定:
-#   TUYA_DEVICE_ID=（Tuyaアプリのデバイスに表示されるID）
-#   TUYA_IP_ADDRESS=（掃除機のIPアドレス）
-#   TUYA_LOCAL_KEY=（tinytuya wizardで取得するローカルキー）
-```
-
-##### 対応機種
-
-Tuya / SmartLife アプリで制御できる Wi-Fi 対応ロボット掃除機であれば動作する可能性があります（VersLife L6 で動作確認済み）。
-
-> **注意**: 対応機種は **2.4GHz Wi-Fi 専用**のものが多いです。5GHz では接続できません。
-
-##### ローカルキーの取得
-
-[tinytuya](https://github.com/jasonacox/tinytuya) の wizard コマンドを使います：
-
-```bash
-pip install tinytuya
-python -m tinytuya wizard
-```
-
-詳しくは [tinytuya のドキュメント](https://github.com/jasonacox/tinytuya?tab=readme-ov-file#setup-wizard---getting-local-keys)を参照。
-
 ### 3. Claude Code 設定
 
-テンプレートをコピーして、認証情報を設定：
+カレントディレクトリの `.mcp.json` に MCP サーバーを登録：
 
-```bash
-cp .mcp.json.example .mcp.json
-# .mcp.json を編集してカメラのIP・パスワード、APIキー等を設定
+```json
+{
+  "mcpServers": {
+    "usb-webcam": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/embodied-claude/usb-webcam-mcp", "usb-webcam-mcp"]
+    },
+    "wifi-cam": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/embodied-claude/wifi-cam-mcp", "wifi-cam-mcp"],
+      "env": {
+        "TAPO_CAMERA_HOST": "192.168.1.xxx",
+        "TAPO_USERNAME": "your-username",
+        "TAPO_PASSWORD": "your-password"
+      }
+    },
+    "memory": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/embodied-claude/memory-mcp", "memory-mcp"]
+    },
+    "elevenlabs-t2s": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/embodied-claude/elevenlabs-t2s-mcp", "elevenlabs-t2s"],
+      "env": {
+        "ELEVENLABS_API_KEY": "your-api-key"
+      }
+    }
+  }
+}
 ```
-
-設定例は [`.mcp.json.example`](./.mcp.json.example) を参照。
 
 ## 使い方
 
@@ -272,30 +265,25 @@ Claude Code を起動すると、自然言語でカメラを操作できる：
 
 ※ 右目/ステレオ視覚などの追加ツールは `wifi-cam-mcp/README.md` を参照。
 
-### tts-mcp
+### elevenlabs-t2s-mcp
 
 | ツール | 説明 |
 |--------|------|
-| `say` | テキストを音声合成して発話（engine: elevenlabs/voicevox、`[excited]` 等の Audio Tags 対応、speaker: camera/local/both で出力先選択） |
+| `say` | テキストを音声合成して発話（`[excited]` 等の Audio Tags 対応） |
 
 ### memory-mcp
 
 | ツール | 説明 |
 |--------|------|
-| `remember` | 記憶を保存（emotion, importance, category 指定可） |
-| `search_memories` | セマンティック検索（フィルタ対応） |
+| `remember` | 記憶を保存 |
+| `search_memories` | セマンティック検索 |
 | `recall` | 文脈に基づく想起 |
-| `recall_divergent` | 連想を発散させた想起 |
-| `recall_with_associations` | 関連記憶を辿って想起 |
-| `save_visual_memory` | 画像付き記憶保存（base64埋め込み、resolution: low/medium/high） |
-| `save_audio_memory` | 音声付き記憶保存（Whisper文字起こし付き） |
-| `recall_by_camera_position` | カメラの方向から視覚記憶を想起 |
-| `create_episode` / `search_episodes` | エピソード（体験の束）の作成・検索 |
-| `link_memories` / `get_causal_chain` | 記憶間の因果リンク・チェーン |
-| `tom` | Theory of Mind（相手の気持ちの推測） |
-| `get_working_memory` / `refresh_working_memory` | 作業記憶（短期バッファ） |
-| `consolidate_memories` | 記憶の再生・統合（海馬リプレイ風） |
-| `list_recent_memories` / `get_memory_stats` | 最近の記憶一覧・統計情報 |
+| `recall_divergent` | 連想を発散させた想起（新） |
+| `list_recent_memories` | 最近の記憶一覧 |
+| `get_memory_stats` | 記憶の統計情報 |
+| `consolidate_memories` | 手動の再生・統合処理（新） |
+| `get_association_diagnostics` | 連想探索の診断情報（新） |
+| `その他` | 連鎖・エピソード・関連記憶（`memory-mcp/README.md`） |
 
 ### system-temperature-mcp
 
@@ -303,17 +291,6 @@ Claude Code を起動すると、自然言語でカメラを操作できる：
 |--------|------|
 | `get_system_temperature` | システム温度を取得 |
 | `get_current_time` | 現在時刻を取得 |
-
-### mobility-mcp
-
-| ツール | 説明 |
-|--------|------|
-| `move_forward` | 前進（duration 秒数で自動停止） |
-| `move_backward` | 後退 |
-| `turn_left` | 左旋回 |
-| `turn_right` | 右旋回 |
-| `stop_moving` | 即座に停止 |
-| `body_status` | バッテリー残量・現在状態の確認 |
 
 ## 外に連れ出す（オプション）
 
@@ -346,24 +323,16 @@ RTSPの映像ストリームもVPN経由で自宅マシンに届くので、Clau
 ## 今後の展望
 
 - **腕**: サーボモーターやレーザーポインターで「指す」動作
+- **移動**: ロボット車輪で部屋を移動
 - **長距離散歩**: 暖かい季節にもっと遠くへ
 
-## 自律行動 + 欲求システム（オプション）
+## 自律行動スクリプト（オプション）
 
 **注意**: この機能は完全にオプションです。cron設定が必要で、定期的にカメラで撮影が行われるため、プライバシーに配慮して使用してください。
 
 ### 概要
 
-`autonomous-action.sh` と `desire-system/desire_updater.py` の組み合わせで、Claude に自発的な欲求と自律行動を与えます。
-
-**欲求の種類:**
-
-| 欲求 | デフォルト間隔 | 行動 |
-|------|--------------|------|
-| `look_outside` | 1時間 | 窓の方向を見て空・外を観察 |
-| `browse_curiosity` | 2時間 | 今日の面白いニュースや技術情報をWebで調べる |
-| `miss_companion` | 3時間 | カメラスピーカーから呼びかける |
-| `observe_room` | 10分（常時） | 部屋の変化を観察・記憶 |
+`autonomous-action.sh` は、Claude に定期的な自律行動を与えるスクリプトです。10分ごとにカメラで部屋を観察し、変化があれば記憶に保存します。
 
 ### セットアップ
 
@@ -374,39 +343,26 @@ cp autonomous-mcp.json.example autonomous-mcp.json
 # autonomous-mcp.json を編集してカメラの認証情報を設定
 ```
 
-2. **欲求システムの設定**
-
-```bash
-cd desire-system
-cp .env.example .env
-# .env を編集して COMPANION_NAME などを設定
-uv sync
-```
-
-3. **スクリプトの実行権限を付与**
+2. **スクリプトの実行権限を付与**
 
 ```bash
 chmod +x autonomous-action.sh
 ```
 
-4. **crontab に登録**
+3. **crontab に登録**（オプション）
 
 ```bash
 crontab -e
-# 以下を追加
-*/5  * * * * cd /path/to/embodied-claude/desire-system && uv run python desire_updater.py >> ~/.claude/autonomous-logs/desire-updater.log 2>&1
+# 以下を追加（10分ごとに実行）
 */10 * * * * /path/to/embodied-claude/autonomous-action.sh
 ```
 
-### 設定可能な環境変数（`desire-system/.env`）
+### 動作
 
-| 変数 | デフォルト | 説明 |
-|------|-----------|------|
-| `COMPANION_NAME` | `あなた` | 呼びかける相手の名前 |
-| `DESIRE_LOOK_OUTSIDE_HOURS` | `1.0` | 外を見る欲求の発火間隔（時間） |
-| `DESIRE_BROWSE_CURIOSITY_HOURS` | `2.0` | 調べ物の発火間隔（時間） |
-| `DESIRE_MISS_COMPANION_HOURS` | `3.0` | 呼びかけ欲求の発火間隔（時間） |
-| `DESIRE_OBSERVE_ROOM_HOURS` | `0.167` | 部屋観察の発火間隔（時間） |
+- カメラで部屋を見回す
+- 前回と比べて変化を検出（人の有無、明るさなど）
+- 気づいたことを記憶に保存（category: observation）
+- ログを `~/.claude/autonomous-logs/` に保存
 
 ### プライバシーに関する注意
 
@@ -433,5 +389,4 @@ MIT License
 3,980円のカメラで始まった小さな一歩が、AIと人間の新しい関係性を探る旅になりました。
 
 - [Rumia-Channel](https://github.com/Rumia-Channel) - ONVIF対応のプルリクエスト（[#5](https://github.com/kmizu/embodied-claude/pull/5)）
-- [fruitriin](https://github.com/fruitriin) - 内受容感覚（interoception）hookに曜日情報を追加（[#14](https://github.com/kmizu/embodied-claude/pull/14)）
 - [sugyan](https://github.com/sugyan) - [claude-code-webui](https://github.com/sugyan/claude-code-webui)（外出散歩時の操作UIとして使用）
