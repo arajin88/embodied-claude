@@ -23,7 +23,7 @@ dev = [
     "ruff>=0.3.0",
 ]
 transcribe = [
-    "openai-whisper>=20231117",
+    "faster-whisper>=1.0.0",
 ]
 
 [project.scripts]
