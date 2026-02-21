@@ -282,9 +282,8 @@ class TapoCamera:
         # Process image
         image = Image.open(io.BytesIO(image_data))
 
-        # Tapo cameras output images assuming ceiling mount.
-        # In normal (desk) mode the image is upside-down, so rotate 180°.
-        if self._config.mount_mode != "ceiling":
+        # In ceiling mount mode the image is upside-down, so rotate 180°.
+        if self._config.mount_mode == "ceiling":
             image = image.rotate(180)
 
         # Resize if needed
@@ -425,9 +424,10 @@ class TapoCamera:
 
         match direction:
             case Direction.LEFT:
-                pan_delta = -_degrees_to_normalized_pan(degrees)
-            case Direction.RIGHT:
+                # Tapo C220: positive x = physical left
                 pan_delta = _degrees_to_normalized_pan(degrees)
+            case Direction.RIGHT:
+                pan_delta = -_degrees_to_normalized_pan(degrees)
             case Direction.UP:
                 # Tapo C220 ONVIF: y+ = physical DOWN, y- = physical UP
                 # (confirmed: y=1.0 is the lower limit when desk-mounted)
