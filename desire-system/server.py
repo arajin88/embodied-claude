@@ -156,15 +156,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
 
     if name == "satisfy_desire":
         try:
-            import chromadb
-            chroma_path = os.getenv(
+            import sqlite3
+            sqlite_path = os.getenv(
                 "MEMORY_DB_PATH",
-                str(Path.home() / ".claude" / "memories" / "chroma"),
+                str(Path.home() / ".claude" / "memories" / "memory.db"),
             )
-            collection_name = os.getenv("MEMORY_COLLECTION_NAME", "claude_memories")
-            client = chromadb.PersistentClient(path=chroma_path)
-            collection = client.get_or_create_collection(collection_name)
-            state = compute_desires(collection)
+            conn = sqlite3.connect(sqlite_path)
+            try:
+                state = compute_desires(conn)
+            finally:
+                conn.close()
             save_desires(state, DESIRES_PATH)
             data = state.to_dict()
             return [TextContent(type="text", text=format_desires(data))]

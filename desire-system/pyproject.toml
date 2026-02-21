@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Autonomous desire system for embodied Claude - gives Kokone inner drives"
 requires-python = ">=3.10"
 dependencies = [
-    "chromadb>=0.5.0",
     "mcp>=1.0.0",
     "python-dotenv>=1.0.0",
 ]
