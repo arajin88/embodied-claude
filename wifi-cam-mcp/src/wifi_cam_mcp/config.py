@@ -22,8 +22,8 @@ class CameraConfig:
     stream_url: str | None = None
     stream_username: str | None = None
     stream_password: str | None = None
-    max_width: int = 1920
-    max_height: int = 1080
+    max_width: int = 3840
+    max_height: int = 2160
     mount_mode: str = "normal"  # "normal" (desktop) or "ceiling" (inverted)
 
     @classmethod
@@ -52,8 +52,8 @@ class CameraConfig:
         ).lower()
         if mount_mode not in ("normal", "ceiling"):
             raise ValueError(f"Invalid mount mode '{mount_mode}'. Must be 'normal' or 'ceiling'.")
-        max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "1920"))
-        max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "1080"))
+        max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "3840"))
+        max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "2160"))
 
         if not host:
             raise ValueError(f"{prefix}_CAMERA_HOST environment variable is required")
@@ -102,8 +102,8 @@ class CameraConfig:
         mount_mode = (
             os.getenv("TAPO_RIGHT_MOUNT_MODE", "") or os.getenv("TAPO_MOUNT_MODE", "") or "normal"
         ).lower()
-        max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "1920"))
-        max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "1080"))
+        max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "3840"))
+        max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "2160"))
 
         if not username or not password:
             return None
@@ -128,13 +128,16 @@ class ServerConfig:
 
     name: str = "wifi-cam-mcp"
     version: str = "0.1.0"
-    capture_dir: str = "/tmp/wifi-cam-mcp"
+    capture_dir: str = ""
 
     @classmethod
     def from_env(cls) -> "ServerConfig":
         """Create config from environment variables."""
+        default_dir = os.path.join(
+            os.path.expanduser("~"), ".cache", "wifi-cam-mcp"
+        )
         return cls(
             name=os.getenv("MCP_SERVER_NAME", "wifi-cam-mcp"),
             version=os.getenv("MCP_SERVER_VERSION", "0.1.0"),
-            capture_dir=os.getenv("CAPTURE_DIR", "/tmp/wifi-cam-mcp"),
+            capture_dir=os.getenv("CAPTURE_DIR", default_dir),
         )
