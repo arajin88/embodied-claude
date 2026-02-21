@@ -106,7 +106,6 @@ def interpret_temperature(temps: list[dict[str, Any]]) -> str:
     if not temps:
         return "温度を感じられへん...センサーが見つからんみたい。"
 
-    avg_temp = sum(t["temperature_celsius"] for t in temps) / len(temps)
     max_temp = max(t["temperature_celsius"] for t in temps)
 
     if max_temp >= 90:
@@ -127,6 +126,27 @@ def interpret_temperature(temps: list[dict[str, Any]]) -> str:
     return feeling
 
 
+def get_nvidia_temperature() -> list[dict[str, Any]]:
+    """Get GPU temperature via nvidia-smi (Windows/Linux対応)."""
+    temperatures = []
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=3,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        val = result.stdout.strip()
+        if val.isdigit():
+            temperatures.append({
+                "source": "nvidia-smi",
+                "name": "GPU",
+                "temperature_celsius": float(val),
+            })
+    except Exception:
+        pass
+    return temperatures
+
+
 def get_all_temperatures() -> dict[str, Any]:
     """Get all available temperature readings."""
     all_temps = []
@@ -135,6 +155,7 @@ def get_all_temperatures() -> dict[str, Any]:
     all_temps.extend(get_thermal_zones())
     all_temps.extend(get_psutil_temperatures())
     all_temps.extend(get_hwmon_temperatures())
+    all_temps.extend(get_nvidia_temperature())
 
     # Remove duplicates based on similar readings
     unique_temps = []
