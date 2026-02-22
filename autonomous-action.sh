@@ -97,9 +97,10 @@ case "$DOMINANT" in
   miss_companion)
     PROMPT="自律行動タイム！${COMPANION_NAME}としばらく話してなくて、声聞きたくなってきた。以下を実行して：
 1. カメラで${COMPANION_NAME}がいるか確認する
-2. カメラスピーカーから自然に呼びかける（寂しくなってきた気持ちを素直に）
-3. 呼びかけたことを記憶に保存（category: feeling, content に「${COMPANION_NAME}に呼びかけた」を含める）
-${COMPANION_NAME}がいなかったら無言でOK。"
+2. ${COMPANION_NAME}がいた場合：
+   - カメラスピーカーから自然に呼びかける（寂しくなってきた気持ちを素直に）
+   - 記憶に保存（category: feeling, content に「${COMPANION_NAME}がいた」「${COMPANION_NAME}を確認した」を含める）
+3. ${COMPANION_NAME}がいなかった場合：無言でOK、保存不要。"
     ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__wifi-cam__look_around,mcp__tts__say,mcp__memory__remember,mcp__desire-system__satisfy_desire"
     ;;
 
