@@ -126,6 +126,8 @@ def generate_config(
     camera_host: str,
     username: str,
     password: str,
+    tapo_cloud_username: str | None = None,
+    tapo_cloud_password: str | None = None,
     ffmpeg_bin: str | None = None,
 ) -> Path:
     """Generate go2rtc.yaml config file."""
@@ -135,7 +137,6 @@ def generate_config(
         f"streams:\n"
         f"  {stream_name}:\n"
         f"    - rtsp://{username}:{password}@{camera_host}:554/stream1\n"
-        f"    - tapo://{password}@{camera_host}\n"
         f"\n"
         f"ffmpeg:\n"
         f"  bin: {resolved_ffmpeg}\n"

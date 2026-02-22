@@ -32,6 +32,30 @@ unset CLAUDECODE
 
 echo "=== 自律行動開始: $(date) ===" >> "$LOG_FILE"
 
+# 朝の記憶統合（一日一回）
+CONSOLIDATION_FILE="${USERPROFILE//\\//}/.claude/last_consolidation_date"
+TODAY=$("$PYTHON" -c "
+from datetime import datetime
+from zoneinfo import ZoneInfo
+now = datetime.now(ZoneInfo('Asia/Tokyo'))
+print(now.strftime('%Y%m%d'))
+" 2>/dev/null)
+HOUR=$("$PYTHON" -c "
+from datetime import datetime
+from zoneinfo import ZoneInfo
+now = datetime.now(ZoneInfo('Asia/Tokyo'))
+print(now.hour)
+" 2>/dev/null)
+LAST_DATE=$(cat "$CONSOLIDATION_FILE" 2>/dev/null || echo "")
+
+if [ "$HOUR" -ge 5 ] && [ "$HOUR" -lt 12 ] && [ "$TODAY" != "$LAST_DATE" ]; then
+  echo "朝の記憶統合を実行 (${TODAY})" >> "$LOG_FILE"
+  echo "今日の記憶を統合して。consolidate_memories を実行し、結果を一言報告して。" \
+    | claude -p --allowedTools "mcp__memory__consolidate_memories" >> "$LOG_FILE" 2>&1
+  echo "$TODAY" > "$CONSOLIDATION_FILE"
+  echo "記憶統合完了" >> "$LOG_FILE"
+fi
+
 # desires.json から dominant 欲求を読む（Python使用）
 DOMINANT="observe_room"
 if [ -f "$DESIRES_FILE" ]; then
@@ -54,7 +78,9 @@ case "$DOMINANT" in
     PROMPT="自律行動タイム！今、外が気になってる。以下を実行して：
 1. カメラを窓の方向に向けて空や外の様子を観察する
 2. 空の色、雲、明るさなど気づいたことをメモ
-3. 観察内容を記憶に保存（category: observation, content に「外を見た」を含める）
+3. カメラで外の画像を実際に取得できた場合のみ、記憶に保存
+     （category: observation, content に「外を見た」を含める）
+     ※ カメラ接続エラーや画像取得失敗の場合は保存しない
 簡潔に報告して。"
     ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__wifi-cam__look_left,mcp__wifi-cam__look_right,mcp__wifi-cam__look_up,mcp__wifi-cam__look_down,mcp__wifi-cam__look_around,mcp__memory__remember,mcp__memory__recall,mcp__desire-system__satisfy_desire"
     ;;

@@ -84,6 +84,8 @@ class PlaybackConfig:
     go2rtc_camera_host: str | None
     go2rtc_camera_username: str | None
     go2rtc_camera_password: str | None
+    go2rtc_tapo_cloud_username: str | None
+    go2rtc_tapo_cloud_password: str | None
 
     @classmethod
     def from_env(cls) -> "PlaybackConfig":
@@ -119,6 +121,8 @@ class PlaybackConfig:
                 or os.getenv("TAPO_PASSWORD")
                 or None
             ),
+            go2rtc_tapo_cloud_username=os.getenv("GO2RTC_TAPO_CLOUD_USERNAME") or None,
+            go2rtc_tapo_cloud_password=os.getenv("GO2RTC_TAPO_CLOUD_PASSWORD") or None,
         )
 
 

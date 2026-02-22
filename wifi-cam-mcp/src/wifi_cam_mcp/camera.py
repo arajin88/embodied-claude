@@ -106,6 +106,8 @@ class TapoCamera:
     Supports C210, C220, and other ONVIF-compatible Tapo PTZ cameras.
     """
 
+    _whisper_model = None  # Class-level cache shared across instances
+
     def __init__(self, config: CameraConfig, capture_dir: str = ""):
         self._config = config
         if not capture_dir:
@@ -125,7 +127,6 @@ class TapoCamera:
         # Software position tracking (fallback when GetStatus unavailable)
         self._sw_position = CameraPosition()
         self._connected = False
-        self._whisper_model = None  # Cached Whisper model
 
     # ------------------------------------------------------------------
     # Connection lifecycle
@@ -666,7 +667,9 @@ class TapoCamera:
                 )
 
             if returncode != 0:
-                stderr_text = result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+                stderr_text = (
+                    result.stderr.decode("utf-8", errors="replace") if result.stderr else ""
+                )
                 stderr_text = stderr_text.replace(self._stream_username, "***")
                 stderr_text = stderr_text.replace(self._stream_password, "***")
                 stderr_text = stderr_text.replace(self._config.host, "***")
@@ -699,7 +702,7 @@ class TapoCamera:
             raise RuntimeError(f"Failed to record audio ({type(e).__name__}): {e!s}") from e
 
     async def _transcribe_audio(self, audio_path: str) -> str | None:
-        """Transcribe audio file using OpenAI Whisper.
+        """Transcribe audio file using faster-whisper.
 
         Args:
             audio_path: Path to the audio file
@@ -708,18 +711,30 @@ class TapoCamera:
             Transcribed text or None if transcription fails
         """
         try:
-            import whisper
+            from faster_whisper import WhisperModel
         except ImportError:
-            return "[Whisper not installed. Run: pip install openai-whisper]"
+            return "[faster-whisper not installed. Run: pip install faster-whisper]"
+
+        import os
+
+        import ctranslate2
+
+        os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
         try:
-            if self._whisper_model is None:
-                self._whisper_model = await asyncio.to_thread(
-                    whisper.load_model, "tiny"
+            if TapoCamera._whisper_model is None:
+                try:
+                    device = "cuda" if ctranslate2.get_cuda_device_count() > 0 else "cpu"
+                except Exception:
+                    device = "cpu"
+                compute_type = "float16" if device == "cuda" else "int8"
+                TapoCamera._whisper_model = await asyncio.to_thread(
+                    WhisperModel, "base", device=device, compute_type=compute_type,
+                    local_files_only=True,
                 )
-            result = await asyncio.to_thread(
-                self._whisper_model.transcribe, audio_path, language="ja"
+            segments, _ = await asyncio.to_thread(
+                TapoCamera._whisper_model.transcribe, audio_path, language="ja"
             )
-            return result.get("text", "").strip()
+            return "".join(seg.text for seg in segments).strip()
         except Exception as e:
             return f"[Transcription failed: {e!s}]"
