@@ -251,7 +251,22 @@ def play_with_go2rtc(
     go2rtc_ffmpeg: str,
 ) -> tuple[bool, str]:
     """Play audio through camera speaker via go2rtc backchannel."""
+    # go2rtc needs an active consumer to enable backchannel.
+    # Start a temporary RTSP consumer to trigger the camera connection.
+    rtsp_port = "8554"
+    rtsp_host = go2rtc_url.split("://")[-1].split(":")[0]
+    consumer = subprocess.Popen(
+        [
+            go2rtc_ffmpeg, "-loglevel", "quiet",
+            "-rtsp_transport", "tcp",
+            "-i", f"rtsp://{rtsp_host}:{rtsp_port}/{go2rtc_stream}",
+            "-f", "null", "-",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     try:
+        time.sleep(2)  # Wait for go2rtc to connect to camera
         abs_path = os.path.abspath(file_path)
         src = f"ffmpeg:{abs_path}#audio=pcma#input=file"
         url = (
@@ -265,8 +280,8 @@ def play_with_go2rtc(
             body = json.loads(resp.read())
 
         has_sender = False
-        for consumer in body.get("consumers", []):
-            if consumer.get("senders"):
+        for c in body.get("consumers", []):
+            if c.get("senders"):
                 has_sender = True
                 break
 
@@ -299,3 +314,9 @@ def play_with_go2rtc(
         return True, f"played via go2rtc → {go2rtc_stream}"
     except Exception as exc:
         return False, f"go2rtc failed: {exc}"
+    finally:
+        consumer.terminate()
+        try:
+            consumer.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            consumer.kill()

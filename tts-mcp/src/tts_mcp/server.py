@@ -278,6 +278,8 @@ class TTSMCP:
                 camera_host=pb.go2rtc_camera_host,
                 username=pb.go2rtc_camera_username or "",
                 password=pb.go2rtc_camera_password,
+                tapo_cloud_username=pb.go2rtc_tapo_cloud_username,
+                tapo_cloud_password=pb.go2rtc_tapo_cloud_password,
                 ffmpeg_bin=pb.go2rtc_ffmpeg,
             )
         else:
