@@ -47,6 +47,8 @@ DESIRE_KEYWORDS: dict[str, list[str]] = {
                        f"{COMPANION_NAME}がいた", f"{COMPANION_NAME}を確認した"],
     # カメラで部屋を実際に観察した記録
     "observe_room": ["look_around", "部屋を観察した", "カメラで部屋を", "4方向"],
+    # 本をOCRして読んだ記録
+    "read_book": ["本を読んだ", "OCRして読んだ", "本の感想"],
 }
 
 # 欲求が満たされる間隔（時間）- この時間が経過すると欲求レベルが1.0になる
@@ -55,6 +57,7 @@ SATISFACTION_HOURS: dict[str, float] = {
     "browse_curiosity": float(os.getenv("DESIRE_BROWSE_CURIOSITY_HOURS", "2.0")),
     "miss_companion": float(os.getenv("DESIRE_MISS_COMPANION_HOURS", "3.0")),
     "observe_room": float(os.getenv("DESIRE_OBSERVE_ROOM_HOURS", "0.167")),
+    "read_book": float(os.getenv("DESIRE_READ_BOOK_HOURS", "4.0")),
 }
 
 

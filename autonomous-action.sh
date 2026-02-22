@@ -103,6 +103,36 @@ ${COMPANION_NAME}がいなかったら無言でOK。"
     ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__wifi-cam__look_around,mcp__tts__say,mcp__memory__remember,mcp__desire-system__satisfy_desire"
     ;;
 
+  read_book)
+    # book / text / english からランダムに1冊・1ページ選ぶ
+    SCAN_DIRS_LIST=("/d/ComDoc/scan/book" "/d/ComDoc/scan/text" "/d/ComDoc/scan/english")
+    RAND_SCAN_DIR=${SCAN_DIRS_LIST[$((RANDOM % ${#SCAN_DIRS_LIST[@]}))]}
+    mapfile -t BOOKS < <(ls -d "$RAND_SCAN_DIR"/*/ 2>/dev/null)
+    if [ ${#BOOKS[@]} -gt 0 ]; then
+      BOOK_DIR="${BOOKS[$((RANDOM % ${#BOOKS[@]}))]%/}"
+      BOOK_NAME=$(basename "$BOOK_DIR")
+      BOOK_DIR_WIN=$(cygpath -w "$BOOK_DIR")
+      PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
+1. 次のコマンドで1ページOCRする（Bashツールを使って）：
+   node D:/ComDoc/projects/ocr/ocr.js page \"${BOOK_DIR_WIN}\" -n 1
+2. コマンド出力に「OK」と表示されたページのtxtファイルを読む
+   （例：0005.jpg → 0005.txt、同じフォルダ内にある）
+3. 読んだ内容の感想を一言メモして記憶に保存
+   （category: daily, content に「本を読んだ：${BOOK_NAME}」を含める）
+4. 面白い・伝えたいことがあれば mcp__tts__say でぱぱさんに話す
+OCRが全ページ済みだったり画像がなければスキップしてOK。簡潔に報告して。"
+      ALLOWED_TOOLS="Bash,Read,mcp__memory__remember,mcp__tts__say,mcp__desire-system__satisfy_desire"
+    else
+      # 本フォルダが見つからなければ observe_room にフォールバック
+      PROMPT="自律行動タイム！以下を実行して：
+1. カメラで部屋を見る
+2. 前回と比べて変化があるか確認（人がいる/いない、明るさ、など）
+3. 気づいたことがあれば記憶に保存（category: observation, content に「部屋を観察した」を含める, importance: 2）
+特に変化がなければ保存しなくてOK。簡潔に報告して。"
+      ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__wifi-cam__look_around,mcp__memory__remember,mcp__memory__recall,mcp__desire-system__satisfy_desire"
+    fi
+    ;;
+
   observe_room|*)
     PROMPT="自律行動タイム！以下を実行して：
 1. カメラで部屋を見る
