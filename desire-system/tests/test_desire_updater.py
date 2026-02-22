@@ -107,6 +107,7 @@ class TestComputeDesires:
             "browse_curiosity",
             "miss_companion",
             "observe_room",
+            "read_book",
         }
 
     def test_all_max_when_no_memories(self):
