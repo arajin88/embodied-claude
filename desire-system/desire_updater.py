@@ -100,7 +100,9 @@ def get_latest_memory_timestamp(
         try:
             ts = datetime.fromisoformat(ts_str)
             if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
+                # memory-mcp は datetime.now().isoformat() でローカル時刻（JST）を保存する
+                # naive datetime はローカル時刻として扱う
+                ts = ts.astimezone()
             if latest is None or ts > latest:
                 latest = ts
         except ValueError:
@@ -125,7 +127,8 @@ def calculate_desire_level(
         return 1.0
 
     if last_satisfied.tzinfo is None:
-        last_satisfied = last_satisfied.replace(tzinfo=timezone.utc)
+        # naive datetime はローカル時刻として扱う
+        last_satisfied = last_satisfied.astimezone()
 
     elapsed_hours = (now - last_satisfied).total_seconds() / 3600
     return max(0.0, min(1.0, elapsed_hours / satisfaction_hours))

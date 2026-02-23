@@ -61,9 +61,25 @@ class TestCalculateDesireLevel:
     def test_naive_datetime_handled(self):
         now = datetime(2026, 2, 18, 12, 0, 0, tzinfo=timezone.utc)
         last = datetime(2026, 2, 18, 11, 0, 0)  # naive
-        # should not raise
+        # should not raise, and elapsed >= 0 (treated as local time, not future)
         result = calculate_desire_level(last, 1.0, now)
-        assert result == 1.0
+        assert 0.0 <= result <= 1.0
+
+    def test_naive_jst_timestamp_not_treated_as_future(self):
+        """JST のナイーブ timestamp が UTC として解釈されて未来扱いされないことを確認。
+
+        memory-mcp は JST ローカル時刻でナイーブな timestamp を保存する。
+        例: 12:45 JST → "2026-02-23T12:45:00" (naive)
+        desire_updater の now は UTC。
+        UTC 04:01 の時点で "12:45 naive" を UTC として扱うと未来 → elapsed < 0 → 0.0 になる (バグ)。
+        ローカル時刻として扱えば 12:45 JST = 03:45 UTC → elapsed = 16分 > 0 (正常)。
+        """
+        # naive datetime はローカル時刻として解釈されるので elapsed >= 0 になるはず
+        last = datetime(2026, 2, 18, 11, 0, 0)  # naive (local time)
+        last_aware = last.astimezone()  # same datetime as timezone-aware local
+        now = last_aware + timedelta(hours=0.5)  # 30分後
+        result = calculate_desire_level(last, 1.0, now)
+        assert result == pytest.approx(0.5, abs=0.01)
 
 
 class TestGetLatestMemoryTimestamp:
