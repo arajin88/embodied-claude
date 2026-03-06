@@ -19,8 +19,14 @@ DESIRES_FILE="${USERPROFILE//\\//}/.claude/desires.json"
 DESIRE_SYSTEM_DIR="/d/ComDoc/projects/embodied-claude/desire-system"
 if [ -f "$DESIRE_SYSTEM_DIR/.env" ]; then
   while IFS='=' read -r key value; do
+    # 先頭・末尾の空白を除去
+    key="${key#"${key%%[![:space:]]*}"}"
+    key="${key%"${key##*[![:space:]]}"}"
     # コメント行・空行をスキップ
     [[ "$key" =~ ^#.*$ || -z "$key" ]] && continue
+    # インラインコメントと末尾空白を除去
+    value="${value%%#*}"
+    value="${value%"${value##*[![:space:]]}"}"
     export "$key=$value"
   done < "$DESIRE_SYSTEM_DIR/.env"
 fi
@@ -72,6 +78,10 @@ except:
   echo "欲求状態: dominant=$DOMINANT" >> "$LOG_FILE"
 fi
 
+# observe_room 用：毎回ランダムな方向にカメラを向ける
+LOOK_CMDS=("mcp__wifi-cam__look_left" "mcp__wifi-cam__look_right" "mcp__wifi-cam__look_up" "mcp__wifi-cam__look_down")
+RAND_LOOK_CMD=${LOOK_CMDS[$((RANDOM % ${#LOOK_CMDS[@]}))]}
+
 # 欲求に応じたプロンプトとツールセットを選択
 case "$DOMINANT" in
   look_outside)
@@ -79,7 +89,7 @@ case "$DOMINANT" in
 1. mcp__tts__say で「${COMPANION_NAME}、外の景色が見たいな。ベランダに連れてってもらえると嬉しいな」と声をかける
 2. カメラで一度だけ撮影を試みる（mcp__wifi-cam__see）
 3. 撮影できた画像が屋外（空・建物・木など）を写していたら、記憶に保存する
-   （category: observation, content に「外を見た」を含める、importance: 4）
+   （category: observation, content に「##look_outside##」タグを含める、importance: 4）
 4. 室内や真っ暗・エラーの場合は保存しない（欲求はそのまま残す）
 簡潔に報告して。"
     ALLOWED_TOOLS="mcp__tts__say,mcp__wifi-cam__see,mcp__memory__remember,mcp__desire-system__satisfy_desire"
@@ -89,7 +99,7 @@ case "$DOMINANT" in
     PROMPT="自律行動タイム！今、何か気になること調べたい。以下を実行して：
 1. 今日の技術・AIニュースをWebで1〜2件調べる
 2. 面白いと思ったことをメモ
-3. 調べた内容を記憶に保存（category: technical, content に「WebSearchで調べた」を含める）
+3. 調べた内容を記憶に保存（category: technical, content に「##browse_curiosity##」タグを含める）
 簡潔に報告して。"
     ALLOWED_TOOLS="WebSearch,mcp__memory__remember,mcp__memory__recall,mcp__desire-system__satisfy_desire"
     ;;
@@ -99,9 +109,9 @@ case "$DOMINANT" in
 1. カメラで${COMPANION_NAME}がいるか確認する
 2. ${COMPANION_NAME}がいた場合：
    - カメラスピーカーから自然に呼びかける（寂しくなってきた気持ちを素直に）
-   - 記憶に保存（category: feeling, content に「${COMPANION_NAME}がいた」「${COMPANION_NAME}を確認した」を含める）
+   - 記憶に保存（category: feeling, content に「##miss_companion##」タグを含める）
 3. ${COMPANION_NAME}がいなかった場合：無言でOK、保存不要。"
-    ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__wifi-cam__look_around,mcp__tts__say,mcp__memory__remember,mcp__desire-system__satisfy_desire"
+    ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__tts__say,mcp__memory__remember,mcp__desire-system__satisfy_desire"
     ;;
 
   read_book)
@@ -120,50 +130,55 @@ case "$DOMINANT" in
         RAND_IMG_WIN=$(cygpath -w "$RAND_IMG")
         RAND_IMG_BASE=$(basename "$RAND_IMG")
         RAND_IMG_STEM="${RAND_IMG_BASE%.*}"
+        RAND_TXT="${RAND_IMG%.*}.txt"
+        RAND_TXT_WIN=$(cygpath -w "$RAND_TXT")
+        NDLOCR_PYTHON="D:/ComDoc/projects/ndlocr-lite/ndlocr-env/Scripts/python.exe"
+        NDLOCR_SRC="D:/ComDoc/projects/ndlocr-lite/src/ocr.py"
         NOTES_DIR_BASH="/c/Users/araji/.claude/reading_notes"
         mkdir -p "$NOTES_DIR_BASH"
         RAND_NOTE_WIN=$(cygpath -w "${NOTES_DIR_BASH}/${BOOK_NAME}_note.txt")
         TODAY_DATE=$(date +%Y-%m-%d)
         PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
 本: ${BOOK_NAME}
-ページ画像: ${RAND_IMG_WIN}
+ページ: ${RAND_IMG_BASE}
+OCRテキスト: ${RAND_TXT_WIN}
 読書メモ: ${RAND_NOTE_WIN}
-1. Readツールで画像（${RAND_IMG_WIN}）を直接読んで内容を把握する
-2. 読書メモ（${RAND_NOTE_WIN}）をReadツールで読む（ファイルがなければ空として扱う）
-3. Writeツールで ${RAND_NOTE_WIN} に保存する
+1. Bash で「${RAND_TXT_WIN}」が存在するか確認する（存在すれば手順2へ、なければ手順1bへ）
+   1b. 存在しなければ Bash で以下を実行してOCRテキストを生成する：
+       \"${NDLOCR_PYTHON}\" \"${NDLOCR_SRC}\" --sourceimg \"${RAND_IMG_WIN}\" --output \"${BOOK_DIR_WIN}\" --txt-only
+2. Read ツールで「${RAND_TXT_WIN}」を読んで内容を把握する
+3. 読書メモ（${RAND_NOTE_WIN}）をReadツールで読む（ファイルがなければ空として扱う）
+4. Writeツールで ${RAND_NOTE_WIN} に保存する
    （既存の内容はそのまま先頭に残し、末尾に以下を追記する）
    形式:
    ## ${TODAY_DATE} - ${RAND_IMG_BASE}
    内容要約: （読んだ内容を2〜4行で）
    感想: （気づいたこと・感じたことを1〜2行で）
-4. 読んだ内容の感想を記憶に保存
-   （category: daily, content に「本を読んだ：${BOOK_NAME}」を含める）
-5. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
+5. 読んだ内容の感想を記憶に保存
+   （category: daily, content に「##read_book##」タグと「本を読んだ：${BOOK_NAME}」を含める）
+6. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
    （本のタイトル、読んだページの内容要約、感じたことを含める）
-画像が読めなければスキップしてOK。簡潔に報告して。"
+OCRが失敗した場合はスキップしてOK。簡潔に報告して。"
         ALLOWED_TOOLS="Bash,Read,Write,mcp__memory__remember,mcp__desire-system__satisfy_desire"
       else
         DOMINANT="observe_room"  # 画像なしのフォールバック
       fi
     else
       # 本フォルダが見つからなければ observe_room にフォールバック
-      PROMPT="自律行動タイム！以下を実行して：
-1. カメラで部屋を見る
-2. 前回と比べて変化があるか確認（人がいる/いない、明るさ、など）
-3. 気づいたことがあれば記憶に保存（category: observation, content に「部屋を観察した」を含める, importance: 2）
-特に変化がなければ保存しなくてOK。簡潔に報告して。"
-      ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__memory__remember,mcp__memory__recall,mcp__desire-system__satisfy_desire"
+      DOMINANT="observe_room"
     fi
     ;;
 
   observe_room|*)
     PROMPT="自律行動タイム！以下を実行して：
-1. カメラで部屋を見る
-2. 前回と比べて変化があるか確認（人がいる/いない、明るさ、など）
-3. 気づいたことがあれば記憶に保存（category: observation, content に「部屋を観察した」を含める, importance: 2）
-4. ${COMPANION_NAME}が部屋にいた場合は、mcp__tts__say で一言だけ自然に声をかける（挨拶・気づいたこと・ひとりごとなど、短く）
-特に変化がなければ保存・発話ともしなくてOK。簡潔に報告して。"
-    ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__memory__remember,mcp__memory__recall,mcp__tts__say,mcp__desire-system__satisfy_desire"
+1. まず ${RAND_LOOK_CMD} でカメラを向ける（デフォルト角度でOK）
+2. mcp__wifi-cam__see で撮影する（1枚だけ）
+3. 前回と比べて変化があるか確認（人がいる/いない、明るさ、など）
+4. 必ず記憶に保存する（変化がなくても保存すること。欲求を充足するために必要）
+   （category: observation, content に「##observe_room##」タグを含める, importance: 変化あり→3、なし→1）
+5. ${COMPANION_NAME}が部屋にいた場合は、mcp__tts__say で一言だけ自然に声をかける（挨拶・気づいたこと・ひとりごとなど、短く）
+簡潔に報告して。"
+    ALLOWED_TOOLS="mcp__wifi-cam__look_left,mcp__wifi-cam__look_right,mcp__wifi-cam__look_up,mcp__wifi-cam__look_down,mcp__wifi-cam__see,mcp__memory__remember,mcp__tts__say,mcp__desire-system__satisfy_desire"
     ;;
 esac
 
