@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -38,17 +39,11 @@ _companion_absent = f"{COMPANION_NAME}がいない"
 
 # 欲求ごとの検索キーワード（記憶のcontentから最新タイムスタンプを探す）
 DESIRE_KEYWORDS: dict[str, list[str]] = {
-    # カメラで外・空を実際に見た記録
-    "look_outside": ["外を見た", "空を見た", "夜景", "朝の空", "ベランダから見た"],
-    # WebSearchや調査を実際に行った記録
-    "browse_curiosity": ["WebSearchで調べた", "WebSearch", "検索した", "調査した", "論文を読んだ"],
-    # カメラでぱぱさんの顔・姿を実際に見た記録
-    "miss_companion": [f"{COMPANION_NAME}の顔を見た", f"{COMPANION_NAME}を見た",
-                       f"{COMPANION_NAME}がいた", f"{COMPANION_NAME}を確認した"],
-    # カメラで部屋を実際に観察した記録
-    "observe_room": ["look_around", "部屋を観察した", "カメラで部屋を", "4方向"],
-    # 本をOCRして読んだ記録
-    "read_book": ["本を読んだ", "OCRして読んだ", "本の感想"],
+    "look_outside": ["##look_outside##"],
+    "browse_curiosity": ["##browse_curiosity##"],
+    "miss_companion": ["##miss_companion##"],
+    "observe_room": ["##observe_room##"],
+    "read_book": ["##read_book##"],
 }
 
 # 欲求が満たされる間隔（時間）- この時間が経過すると欲求レベルが1.0になる
@@ -153,8 +148,10 @@ def compute_desires(
         )
         desires[desire_name] = round(level, 3)
 
-    # 最も欲求レベルが高いものを dominant に
-    dominant = max(desires, key=lambda k: desires[k])
+    # 最も欲求レベルが高いものを dominant に（同率はランダム選択）
+    max_level = max(desires.values())
+    candidates = [k for k, v in desires.items() if v == max_level]
+    dominant = random.choice(candidates)
 
     return DesireState(
         updated_at=now.isoformat(),
