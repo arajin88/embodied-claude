@@ -1175,6 +1175,98 @@ class MemoryStore:
 
         await asyncio.to_thread(_delete)
 
+    # ── Delete memory ─────────────────────────
+
+    async def delete_memory(self, memory_id: str) -> bool:
+        """Delete a memory and clean up all references to it."""
+        db = self._ensure_connected()
+
+        def _delete() -> bool:
+            # Check existence
+            row = db.execute("SELECT id FROM memories WHERE id = ?", (memory_id,)).fetchone()
+            if not row:
+                return False
+
+            # Remove from linked_ids of other memories
+            linked_rows = db.execute(
+                "SELECT id, linked_ids FROM memories WHERE linked_ids LIKE ?",
+                (f"%{memory_id}%",),
+            ).fetchall()
+            for r in linked_rows:
+                ids = [x.strip() for x in r[1].split(",") if x.strip() and x.strip() != memory_id]
+                db.execute("UPDATE memories SET linked_ids = ? WHERE id = ?", (",".join(ids), r[0]))
+
+            # Remove from episodes
+            ep_rows = db.execute(
+                "SELECT id, memory_ids FROM episodes WHERE memory_ids LIKE ?",
+                (f"%{memory_id}%",),
+            ).fetchall()
+            for r in ep_rows:
+                ids = [x.strip() for x in r[1].split(",") if x.strip() and x.strip() != memory_id]
+                db.execute("UPDATE episodes SET memory_ids = ? WHERE id = ?", (",".join(ids), r[0]))
+
+            # Delete coactivation links
+            db.execute("DELETE FROM coactivation WHERE source_id = ? OR target_id = ?", (memory_id, memory_id))
+            # Delete embedding
+            db.execute("DELETE FROM embeddings WHERE memory_id = ?", (memory_id,))
+            # Delete the memory itself
+            db.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            db.commit()
+            return True
+
+        return await asyncio.to_thread(_delete)
+
+    # ── Update memory ─────────────────────────
+
+    async def update_memory(
+        self,
+        memory_id: str,
+        content: str | None = None,
+        emotion: str | None = None,
+        importance: int | None = None,
+        category: str | None = None,
+    ) -> bool:
+        """Update a memory's content, emotion, importance, or category."""
+        db = self._ensure_connected()
+
+        row = db.execute("SELECT id FROM memories WHERE id = ?", (memory_id,)).fetchone()
+        if not row:
+            return False
+
+        updates: dict[str, Any] = {}
+        if emotion is not None:
+            updates["emotion"] = emotion
+        if importance is not None:
+            updates["importance"] = max(1, min(5, importance))
+        if category is not None:
+            updates["category"] = category
+
+        # content changes require re-embedding
+        new_embedding: bytes | None = None
+        if content is not None:
+            updates["content"] = content
+            updates["normalized_content"] = normalize_japanese(content)
+            updates["reading"] = get_reading(content)
+            embedding = await self._encode_document(updates["normalized_content"])
+            new_embedding = encode_vector(embedding)
+
+        if not updates:
+            return True
+
+        def _update() -> bool:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            values = list(updates.values()) + [memory_id]
+            db.execute(f"UPDATE memories SET {set_clause} WHERE id = ?", values)
+            if new_embedding is not None:
+                db.execute(
+                    "INSERT OR REPLACE INTO embeddings (memory_id, vector) VALUES (?, ?)",
+                    (memory_id, new_embedding),
+                )
+            db.commit()
+            return True
+
+        return await asyncio.to_thread(_update)
+
     # ── Divergent recall ─────────────────────────
 
     async def recall_divergent(
