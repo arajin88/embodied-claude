@@ -217,6 +217,7 @@ def _trigger_claude(image_path: str | None, timestamp: str) -> None:
             f"画像パス: {win_path}\n\n"
             f"ぱぱさんや生き物（雀・猫など）が映っていれば TTSで声に出して報告して（say ツール）。"
             f"記憶にも残して（remember ツール）。"
+            f"ぱぱさんが映っていた場合は、追加で content に ##miss_companion## タグを含む記憶も保存して（例: '##miss_companion## ぱぱさんを見かけた：（一言）'）。"
             f"{memory_instruction}\n"
             f"何も映っていなければ静かにして。"
         )

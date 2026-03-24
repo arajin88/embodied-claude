@@ -55,6 +55,13 @@ SATISFACTION_HOURS: dict[str, float] = {
     "read_book": float(os.getenv("DESIRE_READ_BOOK_HOURS", "4.0")),
 }
 
+# 無効化する欲求（カンマ区切り）例: DISABLED_DESIRES=look_outside,browse_curiosity
+_disabled = os.getenv("DISABLED_DESIRES", "")
+DISABLED_DESIRES: set[str] = {d.strip() for d in _disabled.split(",") if d.strip()}
+for _d in DISABLED_DESIRES:
+    DESIRE_KEYWORDS.pop(_d, None)
+    SATISFACTION_HOURS.pop(_d, None)
+
 
 @dataclass
 class DesireState:

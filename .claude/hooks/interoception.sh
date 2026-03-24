@@ -31,15 +31,16 @@ try:
     ar_arrow = arrows.get(trend.get('arousal', 'stable'), '→')
     mem_arrow = arrows.get(trend.get('mem_free', 'stable'), '→')
 
-    # タイムスタンプから時刻・曜日
-    from datetime import datetime
+    # タイムスタンプから時刻・曜日（UTCをローカル時刻に変換）
+    from datetime import datetime, timezone
     ts = now.get('ts', '?')
     if 'T' in ts:
-        time_part = ts.split('T')[1][:8]
         try:
-            dt = datetime.strptime(ts[:10], '%Y-%m-%d')
-            dow = dt.strftime('%a')  # Mon, Tue, ...
+            dt = datetime.fromisoformat(ts).astimezone()
+            time_part = dt.strftime('%H:%M:%S')
+            dow = dt.strftime('%a')
         except Exception:
+            time_part = ts.split('T')[1][:8]
             dow = '?'
     else:
         time_part = ts

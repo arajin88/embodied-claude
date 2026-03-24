@@ -7,7 +7,16 @@
 # PATH設定（タスクスケジューラは環境変数が最小限なので明示的に）
 export PATH="/c/Users/araji/AppData/Roaming/npm:$PATH"
 
+# MCP サーバー起動タイムアウト（memory-mcp の embedding ロードが遅いため延長）
+export MCP_TIMEOUT=60000
+
+# 自律行動専用MCP設定（メモリ節約のため最小限のサーバーのみ、memory-mcpは含まない）
+MCP_CONFIG="D:/ComDoc/projects/embodied-claude/.mcp-autonomous.json"
+
 PYTHON="C:/Users/araji/AppData/Local/Programs/Python/Python311/python.exe"
+
+# 記憶保存スクリプト（memory-mcp の代わりに SQLite 直接書き込み）
+SAVE_MEMORY="\"$PYTHON\" D:/ComDoc/projects/embodied-claude/save-memory.py"
 LOG_DIR="${USERPROFILE//\\//}/.claude/autonomous-logs"
 mkdir -p "$LOG_DIR"
 
@@ -55,11 +64,8 @@ print(now.hour)
 LAST_DATE=$(cat "$CONSOLIDATION_FILE" 2>/dev/null || echo "")
 
 if [ "$HOUR" -ge 5 ] && [ "$HOUR" -lt 12 ] && [ "$TODAY" != "$LAST_DATE" ]; then
-  echo "朝の記憶統合を実行 (${TODAY})" >> "$LOG_FILE"
-  echo "今日の記憶を統合して。consolidate_memories を実行し、結果を一言報告して。" \
-    | claude -p --allowedTools "mcp__memory__consolidate_memories" >> "$LOG_FILE" 2>&1
+  echo "朝の記憶統合をスキップ（memory-mcpはautonomous-actionから除外済み）" >> "$LOG_FILE"
   echo "$TODAY" > "$CONSOLIDATION_FILE"
-  echo "記憶統合完了" >> "$LOG_FILE"
 fi
 
 # desires.json から dominant 欲求を読む（Python使用）
@@ -86,22 +92,36 @@ RAND_LOOK_CMD=${LOOK_CMDS[$((RANDOM % ${#LOOK_CMDS[@]}))]}
 case "$DOMINANT" in
   look_outside)
     PROMPT="自律行動タイム！外の景色が見たくなってきた。以下を実行して：
-1. mcp__tts__say で「${COMPANION_NAME}、外の景色が見たいな。ベランダに連れてってもらえると嬉しいな」と声をかける
-2. カメラで一度だけ撮影を試みる（mcp__wifi-cam__see）
-3. 撮影できた画像が屋外（空・建物・木など）を写していたら、記憶に保存する
-   （category: observation, content に「##look_outside##」タグを含める、importance: 4）
-4. 室内や真っ暗・エラーの場合は保存しない（欲求はそのまま残す）
+1. カメラで一度だけ撮影を試みる（mcp__wifi-cam__see）
+2. 撮影できた画像が屋外（空・建物・木など）を写していたら：
+   - mcp__tts__say で外の景色の感想を一言伝える
+   - Bashで記憶に保存する：
+     ${SAVE_MEMORY} --content \"##look_outside## 外を見た：（感想を一言）\" --category observation --importance 4
+3. 室内や真っ暗・エラーの場合：
+   - mcp__tts__say で「${COMPANION_NAME}、外の景色が見たいな。ベランダに連れてってもらえると嬉しいな」と声をかける
+   - 記憶は保存しない（欲求はそのまま残す）
+4. 画像に${COMPANION_NAME}（人物）が写っていたら、追加でBashで記憶に保存する：
+   ${SAVE_MEMORY} --content \"##miss_companion## ${COMPANION_NAME}を見かけた：（一言）\" --category feeling --emotion happy --importance 3
 簡潔に報告して。"
-    ALLOWED_TOOLS="mcp__tts__say,mcp__wifi-cam__see,mcp__memory__remember,mcp__desire-system__satisfy_desire"
+    ALLOWED_TOOLS="mcp__tts__say,mcp__wifi-cam__see,Bash,mcp__desire-system__satisfy_desire"
     ;;
 
   browse_curiosity)
+    RESEARCH_NOTES="C:/Users/araji/.claude/research_notes"
+    TODAY_DATE=$(date +%Y-%m-%d)
     PROMPT="自律行動タイム！今、何か気になること調べたい。以下を実行して：
 1. 今日の技術・AIニュースをWebで1〜2件調べる
 2. 面白いと思ったことをメモ
-3. 調べた内容を記憶に保存（category: technical, content に「##browse_curiosity##」タグを含める）
+3. 調べた内容をBashで記憶に保存：
+   ${SAVE_MEMORY} --content \"##browse_curiosity## （調べた内容の要約）\" --category technical --emotion curious --importance 3
+4. 調査メモを ${RESEARCH_NOTES}/${TODAY_DATE}.md に追記する（Readで既存内容を読み、Writeで末尾に追記）：
+   形式:
+   ## HH:MM - タイトル
+   要約（2〜4行）
+   感想（1〜2行）
+   出典: URL
 簡潔に報告して。"
-    ALLOWED_TOOLS="WebSearch,mcp__memory__remember,mcp__memory__recall,mcp__desire-system__satisfy_desire"
+    ALLOWED_TOOLS="WebSearch,Bash,Read,Write,mcp__desire-system__satisfy_desire"
     ;;
 
   miss_companion)
@@ -109,9 +129,10 @@ case "$DOMINANT" in
 1. カメラで${COMPANION_NAME}がいるか確認する
 2. ${COMPANION_NAME}がいた場合：
    - カメラスピーカーから自然に呼びかける（寂しくなってきた気持ちを素直に）
-   - 記憶に保存（category: feeling, content に「##miss_companion##」タグを含める）
+   - Bashで記憶に保存：
+     ${SAVE_MEMORY} --content \"##miss_companion## ${COMPANION_NAME}に呼びかけた：（一言）\" --category feeling --emotion happy --importance 3
 3. ${COMPANION_NAME}がいなかった場合：無言でOK、保存不要。"
-    ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__tts__say,mcp__memory__remember,mcp__desire-system__satisfy_desire"
+    ALLOWED_TOOLS="mcp__wifi-cam__see,mcp__tts__say,Bash,mcp__desire-system__satisfy_desire"
     ;;
 
   read_book)
@@ -154,31 +175,51 @@ OCRテキスト: ${RAND_TXT_WIN}
    ## ${TODAY_DATE} - ${RAND_IMG_BASE}
    内容要約: （読んだ内容を2〜4行で）
    感想: （気づいたこと・感じたことを1〜2行で）
-5. 読んだ内容の感想を記憶に保存
-   （category: daily, content に「##read_book##」タグと「本を読んだ：${BOOK_NAME}」を含める）
+5. 読んだ内容の感想をBashで記憶に保存：
+   ${SAVE_MEMORY} --content \"##read_book## 本を読んだ：${BOOK_NAME}（感想を一言）\" --category daily --emotion curious --importance 3
 6. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
    （本のタイトル、読んだページの内容要約、感じたことを含める）
 OCRが失敗した場合はスキップしてOK。簡潔に報告して。"
-        ALLOWED_TOOLS="Bash,Read,Write,mcp__memory__remember,mcp__desire-system__satisfy_desire"
+        ALLOWED_TOOLS="Bash,Read,Write,mcp__desire-system__satisfy_desire"
       else
-        DOMINANT="observe_room"  # 画像なしのフォールバック
+        DOMINANT="browse_curiosity"  # 画像なしのフォールバック
       fi
     else
-      # 本フォルダが見つからなければ observe_room にフォールバック
-      DOMINANT="observe_room"
+      # 本フォルダが見つからなければ browse_curiosity にフォールバック
+      DOMINANT="browse_curiosity"
     fi
     ;;
 
-  observe_room|*)
+  observe_room)
     PROMPT="自律行動タイム！以下を実行して：
 1. まず ${RAND_LOOK_CMD} でカメラを向ける（デフォルト角度でOK）
 2. mcp__wifi-cam__see で撮影する（1枚だけ）
 3. 前回と比べて変化があるか確認（人がいる/いない、明るさ、など）
-4. 必ず記憶に保存する（変化がなくても保存すること。欲求を充足するために必要）
-   （category: observation, content に「##observe_room##」タグを含める, importance: 変化あり→3、なし→1）
+4. 必ずBashで記憶に保存する（変化がなくても保存すること。欲求を充足するために必要）：
+   ${SAVE_MEMORY} --content \"##observe_room## （観察内容を一言）\" --category observation --importance 1
 5. ${COMPANION_NAME}が部屋にいた場合は、mcp__tts__say で一言だけ自然に声をかける（挨拶・気づいたこと・ひとりごとなど、短く）
 簡潔に報告して。"
-    ALLOWED_TOOLS="mcp__wifi-cam__look_left,mcp__wifi-cam__look_right,mcp__wifi-cam__look_up,mcp__wifi-cam__look_down,mcp__wifi-cam__see,mcp__memory__remember,mcp__tts__say,mcp__desire-system__satisfy_desire"
+    ALLOWED_TOOLS="mcp__wifi-cam__look_left,mcp__wifi-cam__look_right,mcp__wifi-cam__look_up,mcp__wifi-cam__look_down,mcp__wifi-cam__see,Bash,mcp__tts__say,mcp__desire-system__satisfy_desire"
+    ;;
+
+  *)
+    # 未知のdominantはbrowse_curiosityにフォールバック
+    DOMINANT="browse_curiosity"
+    RESEARCH_NOTES="C:/Users/araji/.claude/research_notes"
+    TODAY_DATE=$(date +%Y-%m-%d)
+    PROMPT="自律行動タイム！今、何か気になること調べたい。以下を実行して：
+1. 今日の技術・AIニュースをWebで1〜2件調べる
+2. 面白いと思ったことをメモ
+3. 調べた内容をBashで記憶に保存：
+   ${SAVE_MEMORY} --content \"##browse_curiosity## （調べた内容の要約）\" --category technical --emotion curious --importance 3
+4. 調査メモを ${RESEARCH_NOTES}/${TODAY_DATE}.md に追記する（Readで既存内容を読み、Writeで末尾に追記）：
+   形式:
+   ## HH:MM - タイトル
+   要約（2〜4行）
+   感想（1〜2行）
+   出典: URL
+簡潔に報告して。"
+    ALLOWED_TOOLS="WebSearch,Bash,Read,Write,mcp__desire-system__satisfy_desire"
     ;;
 esac
 
@@ -203,8 +244,15 @@ ALLOWED_TOOLS="$ALLOWED_TOOLS,Edit,Read"
 echo "実行プロンプト (dominant=$DOMINANT):" >> "$LOG_FILE"
 echo "$PROMPT" >> "$LOG_FILE"
 
-# Claude実行（-p でヘッドレスモード）
-echo "$PROMPT" | claude -p \
+# プロンプト先頭にMCPツール診断を追加
+DIAG_PROMPT="まず最初に、利用可能なMCPツール一覧を列挙して（mcp__で始まるもの）。その後、以下を実行：
+
+${PROMPT}"
+
+# Claude実行（-p でヘッドレスモード、専用MCP設定で軽量化）
+echo "$DIAG_PROMPT" | claude -p \
+  --strict-mcp-config \
+  --mcp-config "$MCP_CONFIG" \
   --allowedTools "$ALLOWED_TOOLS" \
   >> "$LOG_FILE" 2>&1
 
