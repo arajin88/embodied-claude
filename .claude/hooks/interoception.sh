@@ -68,6 +68,20 @@ try:
         f\"heartbeat={heartbeat_status}\",
     ]
 
+    # スリープ復帰情報
+    last_slept = data.get('last_slept')
+    if last_slept:
+        try:
+            s = datetime.fromisoformat(last_slept['sleep']).astimezone()
+            w = datetime.fromisoformat(last_slept['wake']).astimezone()
+            delta = w - s
+            h = int(delta.total_seconds() // 3600)
+            m = int((delta.total_seconds() % 3600) // 60)
+            fmt = '%m/%d %H:%M' if h >= 24 else '%H:%M'
+            parts.append(f\"slept={s.strftime(fmt)}-{w.strftime(fmt)}({h}h{m}m)\")
+        except Exception:
+            pass
+
     # desires.json を読んで欲求レベルを追加
     import os
     desires_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'desires.json')
