@@ -260,6 +260,11 @@ async def run() -> None:
     last_trigger_time: datetime | None = None
 
     while True:
+        # .envを再読み込みしてIPの変更を反映
+        global CAMERA_HOST
+        load_dotenv(_project_root / ".env", override=True)
+        CAMERA_HOST = os.environ["TAPO_CAMERA_HOST"]
+
         try:
             cam, pullpoint, profile_token = await _connect()
         except Exception as e:
