@@ -56,6 +56,10 @@ RECONNECT_WAIT = 15
 LOG_DIR = Path(os.environ["USERPROFILE"]) / ".claude" / "motion-logs"
 CAPTURE_DIR = LOG_DIR / "captures"
 
+# Discord通知設定
+DISCORD_ALERT_FAILURES = 10  # 連続失敗N回で通知
+_DISCORD_ENV = Path(os.environ["USERPROFILE"]) / ".claude" / "channels" / "discord" / ".env"
+
 BASH_EXE = r"C:\Program Files\Git\bin\bash.exe"
 PROJECT_DIR = str(_project_root.parent)
 
@@ -89,6 +93,60 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# Discord通知
+# ---------------------------------------------------------------------------
+
+def _send_discord_alert(message: str) -> None:
+    """DiscordのDMにアラートを送信する。失敗しても例外を出さない。"""
+    try:
+        if not _DISCORD_ENV.exists():
+            logger.warning("Discord .env が見つからないため通知をスキップ")
+            return
+        # トークン読み取り
+        token = None
+        for line in _DISCORD_ENV.read_text(encoding="utf-8").splitlines():
+            if line.startswith("DISCORD_BOT_TOKEN="):
+                token = line.split("=", 1)[1].strip()
+        if not token:
+            return
+        # チャットIDはaccess.jsonのallowFromからDMを開く
+        import json as _json
+        import urllib.request
+        user_id = None
+        access_path = _DISCORD_ENV.parent / "access.json"
+        if access_path.exists():
+            data = _json.loads(access_path.read_text(encoding="utf-8"))
+            allow = data.get("allowFrom", [])
+            if allow:
+                user_id = allow[0]
+        if not user_id:
+            return
+        # DM チャンネルを作成/取得
+        req = urllib.request.Request(
+            "https://discord.com/api/v10/users/@me/channels",
+            data=_json.dumps({"recipient_id": user_id}).encode(),
+            headers={
+                "Authorization": f"Bot {token}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            chat_id = _json.loads(resp.read())["id"]
+        # メッセージ送信
+        req = urllib.request.Request(
+            f"https://discord.com/api/v10/channels/{chat_id}/messages",
+            data=_json.dumps({"content": message}).encode(),
+            headers={
+                "Authorization": f"Bot {token}",
+                "Content-Type": "application/json",
+            },
+        )
+        urllib.request.urlopen(req, timeout=10)
+        logger.info("Discord通知送信: %s", message[:50])
+    except Exception as e:
+        logger.warning("Discord通知失敗: %s", e)
+
+
 # ONVIF ヘルパー
 # ---------------------------------------------------------------------------
 
@@ -258,6 +316,8 @@ def _trigger_claude(image_path: str | None, timestamp: str) -> None:
 async def run() -> None:
     last_is_motion: str | None = None
     last_trigger_time: datetime | None = None
+    consecutive_failures = 0
+    alert_sent = False
 
     while True:
         # .envを再読み込みしてIPの変更を反映
@@ -268,9 +328,25 @@ async def run() -> None:
         try:
             cam, pullpoint, profile_token = await _connect()
         except Exception as e:
-            logger.error("接続失敗: %s — %d秒後に再試行", e, RECONNECT_WAIT)
+            consecutive_failures += 1
+            logger.error(
+                "接続失敗: %s — %d秒後に再試行 (%d回目)",
+                e, RECONNECT_WAIT, consecutive_failures,
+            )
+            if consecutive_failures >= DISCORD_ALERT_FAILURES and not alert_sent:
+                _send_discord_alert(
+                    f"動体検知デーモン: カメラ({CAMERA_HOST})に"
+                    f"{consecutive_failures}回連続接続失敗中"
+                )
+                alert_sent = True
             await asyncio.sleep(RECONNECT_WAIT)
             continue
+
+        # 接続成功 → カウントリセット
+        if consecutive_failures > 0:
+            logger.info("接続復旧（%d回失敗後）", consecutive_failures)
+        consecutive_failures = 0
+        alert_sent = False
 
         try:
             while True:
