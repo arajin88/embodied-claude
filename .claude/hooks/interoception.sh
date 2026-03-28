@@ -11,7 +11,7 @@ if [ ! -f "$STATE_FILE" ]; then
     CURRENT_TIME=$(date '+%H:%M:%S')
     CURRENT_DOW=$(date '+%a')
     CURRENT_DATE=$(date '+%Y-%m-%d')
-    echo "[interoception] time=${CURRENT_TIME} day=${CURRENT_DOW} date=${CURRENT_DATE} (heartbeat daemon not running)"
+    echo "[interoception] time=${CURRENT_TIME} day=${CURRENT_DOW} date=${CURRENT_DATE} heartbeat=DOWN (state file missing)"
     exit 0
 fi
 
@@ -46,6 +46,16 @@ try:
         time_part = ts
         dow = '?'
 
+    # heartbeat鮮度チェック
+    heartbeat_status = 'ok'
+    if 'T' in ts:
+        try:
+            age_sec = (datetime.now(timezone.utc) - datetime.fromisoformat(ts)).total_seconds()
+            if age_sec > 60:
+                heartbeat_status = f'STALE({int(age_sec)}s)'
+        except Exception:
+            heartbeat_status = 'unknown'
+
     parts = [
         f\"time={time_part}\",
         f\"day={dow}\",
@@ -55,6 +65,7 @@ try:
         f\"mem_free={now.get('mem_free', '?')}%({mem_arrow})\",
         f\"uptime={now.get('uptime_min', '?')}min\",
         f\"heartbeats={len(window)}\",
+        f\"heartbeat={heartbeat_status}\",
     ]
 
     # desires.json を読んで欲求レベルを追加
