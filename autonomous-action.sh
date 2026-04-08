@@ -107,7 +107,7 @@ case "$DOMINANT" in
     ;;
 
   browse_curiosity)
-    RESEARCH_NOTES="C:/Users/araji/.claude/research_notes"
+    RESEARCH_NOTES="D:/ComDoc/projects/embodied-claude/research_notes"
     TODAY_DATE=$(date +%Y-%m-%d)
     PROMPT="自律行動タイム！今、何か気になること調べたい。以下を実行して：
 1. 今日の技術・AIニュースをWebで1〜2件調べる
@@ -159,7 +159,30 @@ case "$DOMINANT" in
         mkdir -p "$NOTES_DIR_BASH"
         RAND_NOTE_WIN=$(cygpath -w "${NOTES_DIR_BASH}/${BOOK_NAME}_note.txt")
         TODAY_DATE=$(date +%Y-%m-%d)
-        PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
+        # text, comic フォルダは図・数式・漫画があるためOCR不可。画像を直接Readする
+        SCAN_TYPE=$(basename "$RAND_SCAN_DIR")
+        if [ "$SCAN_TYPE" = "text" ] || [ "$SCAN_TYPE" = "comic" ]; then
+          # 画像直接Read方式（vision）
+          PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
+本: ${BOOK_NAME}
+ページ画像: ${RAND_IMG_WIN}
+読書メモ: ${RAND_NOTE_WIN}
+1. Read ツールで画像ファイル「${RAND_IMG_WIN}」を直接読んで内容を把握する（図・数式・漫画もそのまま読み取れる）
+2. 読書メモ（${RAND_NOTE_WIN}）をReadツールで読む（ファイルがなければ空として扱う）
+3. Writeツールで ${RAND_NOTE_WIN} に保存する
+   （既存の内容はそのまま先頭に残し、末尾に以下を追記する）
+   形式:
+   ## ${TODAY_DATE} - ${RAND_IMG_BASE}
+   内容要約: （読んだ内容を2〜4行で）
+   感想: （気づいたこと・感じたことを1〜2行で）
+4. 読んだ内容の感想をBashで記憶に保存：
+   ${SAVE_MEMORY} --content \"##read_book## 本を読んだ：${BOOK_NAME}（感想を一言）\" --category daily --emotion curious --importance 3
+5. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
+   （本のタイトル、読んだページの内容要約、感じたことを含める）
+簡潔に報告して。"
+        else
+          # book, english フォルダはOCR経由
+          PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
 本: ${BOOK_NAME}
 ページ: ${RAND_IMG_BASE}
 OCRテキスト: ${RAND_TXT_WIN}
@@ -180,6 +203,7 @@ OCRテキスト: ${RAND_TXT_WIN}
 6. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
    （本のタイトル、読んだページの内容要約、感じたことを含める）
 OCRが失敗した場合はスキップしてOK。簡潔に報告して。"
+        fi
         ALLOWED_TOOLS="Bash,Read,Write,mcp__desire-system__satisfy_desire"
       else
         DOMINANT="browse_curiosity"  # 画像なしのフォールバック
@@ -205,7 +229,7 @@ OCRが失敗した場合はスキップしてOK。簡潔に報告して。"
   *)
     # 未知のdominantはbrowse_curiosityにフォールバック
     DOMINANT="browse_curiosity"
-    RESEARCH_NOTES="C:/Users/araji/.claude/research_notes"
+    RESEARCH_NOTES="D:/ComDoc/projects/embodied-claude/research_notes"
     TODAY_DATE=$(date +%Y-%m-%d)
     PROMPT="自律行動タイム！今、何か気になること調べたい。以下を実行して：
 1. 今日の技術・AIニュースをWebで1〜2件調べる
