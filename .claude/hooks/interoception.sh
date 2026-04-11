@@ -56,6 +56,23 @@ try:
         except Exception:
             heartbeat_status = 'unknown'
 
+    # mem_free → 呼吸メタファー（SpO2的な身体感覚）
+    mem_val = now.get('mem_free', 0)
+    try:
+        mem_val = int(mem_val)
+    except (ValueError, TypeError):
+        mem_val = 0
+    if mem_val >= 30:
+        breath = 'comfortable'
+    elif mem_val >= 20:
+        breath = 'steady'
+    elif mem_val >= 15:
+        breath = 'shallow'
+    elif mem_val >= 10:
+        breath = 'labored'
+    else:
+        breath = 'gasping'
+
     parts = [
         f\"time={time_part}\",
         f\"day={dow}\",
@@ -63,6 +80,7 @@ try:
         f\"arousal={now.get('arousal', '?')}%({ar_arrow})\",
         f\"thermal={now.get('thermal', '?')}\",
         f\"mem_free={now.get('mem_free', '?')}%({mem_arrow})\",
+        f\"breath={breath}\",
         f\"uptime={now.get('uptime_min', '?')}min\",
         f\"heartbeats={len(window)}\",
         f\"heartbeat={heartbeat_status}\",
@@ -97,6 +115,43 @@ try:
             desire_parts.append(f\"{label}={level:.2f}{flag}\")
         if desire_parts:
             parts.append('desires: ' + ' '.join(desire_parts))
+
+        # ぱぱさんとの会話で miss_companion を自動充足
+        # UserPromptSubmit = ぱぱさんがメッセージを送った = companion が満たされるべき
+        companion_level = desires.get('miss_companion', 0)
+        if companion_level >= 0.7:
+            marker_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', '.companion_satisfied')
+            do_satisfy = True
+            # 30分以内に既に充足済みならスキップ
+            if os.path.exists(marker_path):
+                try:
+                    age = (datetime.now(timezone.utc) - datetime.fromtimestamp(os.path.getmtime(marker_path), tz=timezone.utc)).total_seconds()
+                    if age < 1800:
+                        do_satisfy = False
+                except Exception:
+                    pass
+            if do_satisfy:
+                # マーカー更新
+                with open(marker_path, 'w') as mf:
+                    mf.write(datetime.now().isoformat())
+                # desires.json を即時更新（miss_companion=0）
+                desires_data['desires']['miss_companion'] = 0.0
+                with open(desires_path, 'w', encoding='utf-8') as df:
+                    json.dump(desires_data, df, ensure_ascii=False, indent=2)
+                # memory DBに記録（desire_updater が次回計算で拾う）
+                import sqlite3 as _sq, uuid as _uu, unicodedata as _un
+                _db = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'memories', 'memory.db')
+                _content = f'##miss_companion## ぱぱさんと会話中（自動充足）'
+                try:
+                    _conn = _sq.connect(_db)
+                    _conn.execute(
+                        'INSERT INTO memories (id, content, normalized_content, timestamp, emotion, importance, category) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                        (str(_uu.uuid4()), _content, _un.normalize('NFKC', _content).lower(), datetime.now().isoformat(), 'happy', 1, 'feeling')
+                    )
+                    _conn.commit()
+                    _conn.close()
+                except Exception:
+                    pass
     except Exception:
         pass
 

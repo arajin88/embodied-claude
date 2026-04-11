@@ -110,6 +110,21 @@ def _send_discord_alert(message: str) -> None:
         logger.warning("Discord通知失敗: %s", e)
 
 
+def _send_discord_motion(image_path: str, ts: datetime) -> None:
+    """動体検知時に画像付きでDiscord DM送信する。失敗しても例外を出さない。"""
+    try:
+        import sys as _sys
+        _hooks = str(Path(__file__).resolve().parent.parent / ".claude" / "hooks")
+        if _hooks not in _sys.path:
+            _sys.path.insert(0, _hooks)
+        from discord_notify import send_dm_with_image
+        msg = f"📸 動体検知 {ts.strftime('%H:%M:%S')}"
+        send_dm_with_image(msg, image_path)
+        logger.info("Discord動体検知通知送信: %s", image_path)
+    except Exception as e:
+        logger.warning("Discord動体検知通知失敗: %s", e)
+
+
 # ONVIF ヘルパー
 # ---------------------------------------------------------------------------
 
@@ -341,6 +356,9 @@ async def run() -> None:
                             logger.info("動き開始検知！ スナップショット撮影中...")
                             # 即座にスナップショット撮影（awaitで同期）
                             image_path = await _capture_snapshot(cam, profile_token, timestamp)
+                            # Discord DMに画像付きで通知（claude -pより先に、確実に送る）
+                            if image_path:
+                                _send_discord_motion(image_path, now)
                             _trigger_claude(image_path, timestamp)
                             last_trigger_time = now
                         else:
