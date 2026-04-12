@@ -1,4 +1,4 @@
 #!/bin/bash
-# ダル君起動スクリプト
-# exit後にこれを実行するだけでOK（--continue + Discord channels）
+# Dal-kun startup script (Git Bash)
+# Run this after /exit to resume with --continue and Discord channel.
 exec claude --continue --channels plugin:discord@claude-plugins-official

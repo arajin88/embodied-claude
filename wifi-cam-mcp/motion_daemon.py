@@ -125,6 +125,31 @@ def _send_discord_motion(image_path: str, ts: datetime) -> None:
         logger.warning("Discord動体検知通知失敗: %s", e)
 
 
+def _enqueue_session_event(image_path: str, ts: datetime) -> None:
+    """会話中のセッションに通知をプッシュする（event-notify-mcp 経由）。
+
+    event-notify-mcp が起動していない場合はキューにファイルが溜まるだけで
+    実害はないが、念のため例外は握りつぶす。
+    """
+    try:
+        import sys as _sys
+        _hooks = str(Path(__file__).resolve().parent.parent / ".claude" / "hooks")
+        if _hooks not in _sys.path:
+            _sys.path.insert(0, _hooks)
+        from event_queue import enqueue_motion
+        ok = enqueue_motion(
+            timestamp=ts.strftime("%H:%M:%S"),
+            image_path=image_path,
+            hint="",
+        )
+        if ok:
+            logger.info("session event enqueued: %s", image_path)
+        else:
+            logger.warning("session event enqueue returned False")
+    except Exception as e:
+        logger.warning("session event enqueue failed: %s", e)
+
+
 # ONVIF ヘルパー
 # ---------------------------------------------------------------------------
 
@@ -359,6 +384,8 @@ async def run() -> None:
                             # Discord DMに画像付きで通知（claude -pより先に、確実に送る）
                             if image_path:
                                 _send_discord_motion(image_path, now)
+                                # 会話中のセッションにもプッシュ（event-notify-mcp経由）
+                                _enqueue_session_event(image_path, now)
                             _trigger_claude(image_path, timestamp)
                             last_trigger_time = now
                         else:

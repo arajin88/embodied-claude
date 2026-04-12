@@ -109,18 +109,58 @@ case "$DOMINANT" in
   browse_curiosity)
     RESEARCH_NOTES="D:/ComDoc/projects/embodied-claude/research_notes"
     TODAY_DATE=$(date +%Y-%m-%d)
-    PROMPT="自律行動タイム！今、何か気になること調べたい。以下を実行して：
-1. 今日の技術・AIニュースをWebで1〜2件調べる
-2. 面白いと思ったことをメモ
-3. 調べた内容をBashで記憶に保存：
-   ${SAVE_MEMORY} --content \"##browse_curiosity## （調べた内容の要約）\" --category technical --emotion curious --importance 3
-4. 調査メモを ${RESEARCH_NOTES}/${TODAY_DATE}.md に追記する（Readで既存内容を読み、Writeで末尾に追記）：
-   形式:
-   ## HH:MM - タイトル
-   要約（2〜4行）
-   感想（1〜2行）
-   出典: URL
-簡潔に報告して。"
+
+    # 直近のbrowse_curiosity履歴を取得（「今日は何を調べたい腹だ？」のため）
+    RECENT_BROWSE=$(PYTHONIOENCODING=utf-8 "$PYTHON" -c "
+import sqlite3, os, sys
+sys.stdout.reconfigure(encoding='utf-8')
+db = os.path.expanduser('~/.claude/memories/memory.db')
+try:
+    conn = sqlite3.connect(db)
+    rows = conn.execute('''
+        SELECT substr(timestamp, 1, 16), substr(content, 1, 250) FROM memories
+        WHERE content LIKE '%##browse_curiosity%'
+        ORDER BY timestamp DESC LIMIT 10
+    ''').fetchall()
+    for ts, c in rows:
+        print(f'- [{ts}] {c.strip()}')
+except Exception as e:
+    print(f'(履歴取得エラー: {e})')
+" 2>/dev/null)
+
+    PROMPT="自律行動タイム！今、何か気になることを調べたい。
+
+【直近の調査履歴】（新しい順、最大10件）
+${RECENT_BROWSE:-（履歴なし）}
+
+以下を順番に実行して：
+
+**手順1: 「今日のダルは何を調べたい腹だ？」を自問する**
+- 直近の調査履歴から、最近追いかけているテーマの流れを読み取る
+- 『この数日AIニュースが続いた、今日は別の分野が気になる』のように、今日の方向を一言で言語化する
+- あるいは『先日のMCPトレンドの続きを追いたい』のように、継続する方向でもいい
+- この一言を内省メモとして覚えておく（手順4で書く）
+
+**手順2: その方向に合うテーマでWeb検索**
+- 手順1の方向に沿ってWebSearchで1〜2件調べる
+- 技術・AI以外の分野でも構わない（自分の関心に正直に）
+- ただし政治・時事ニュース過剰には寄せない、知的好奇心を起点にする
+
+**手順3: 面白いと思った内容をメモ**
+
+**手順4: 調査メモを ${RESEARCH_NOTES}/${TODAY_DATE}.md に追記する**
+- Read で既存内容を確認（ファイルがなければ空として扱う）
+- Write で末尾に以下の形式で追記:
+  ## HH:MM - タイトル
+  【今日の選び方】 （手順1の「何腹だ？」の一言）
+  要約（2〜4行、自分の言葉で）
+  感想（1〜2行）
+  出典: URL
+
+**手順5: 記憶に保存**
+${SAVE_MEMORY} --content \"##browse_curiosity## （調べた内容の要約）\" --category technical --emotion curious --importance 3
+
+迷ったら、自分の関心に関心を持つことを優先する。簡潔に報告して。"
     ALLOWED_TOOLS="WebSearch,Bash,Read,Write,mcp__desire-system__satisfy_desire"
     ;;
 
@@ -136,81 +176,103 @@ case "$DOMINANT" in
     ;;
 
   read_book)
-    # book / text / english からランダムに1冊・1ページ選ぶ
+    # 直近の読書履歴を取得（「今日のダルは何腹だ？」のための内受容感覚）
+    RECENT_READS=$(PYTHONIOENCODING=utf-8 "$PYTHON" -c "
+import sqlite3, os, sys
+sys.stdout.reconfigure(encoding='utf-8')
+db = os.path.expanduser('~/.claude/memories/memory.db')
+try:
+    conn = sqlite3.connect(db)
+    rows = conn.execute('''
+        SELECT substr(timestamp, 1, 10), substr(content, 1, 250) FROM memories
+        WHERE content LIKE '%##read_book##%'
+        ORDER BY timestamp DESC LIMIT 10
+    ''').fetchall()
+    for ts, c in rows:
+        print(f'- [{ts}] {c.strip()}')
+except Exception as e:
+    print(f'(履歴取得エラー: {e})')
+" 2>/dev/null)
+
+    # 5つの候補 (本, ページ) をランダム生成（フォルダ横断）
     SCAN_DIRS_LIST=("/d/ComDoc/scan/book" "/d/ComDoc/scan/text" "/d/ComDoc/scan/english" "/d/ComDoc/scan/comic")
-    RAND_SCAN_DIR=${SCAN_DIRS_LIST[$((RANDOM % ${#SCAN_DIRS_LIST[@]}))]}
-    mapfile -t BOOKS < <(ls -d "$RAND_SCAN_DIR"/*/ 2>/dev/null)
-    if [ ${#BOOKS[@]} -gt 0 ]; then
-      BOOK_DIR="${BOOKS[$((RANDOM % ${#BOOKS[@]}))]%/}"
-      BOOK_NAME=$(basename "$BOOK_DIR")
-      BOOK_DIR_WIN=$(cygpath -w "$BOOK_DIR")
-      # ランダムに画像1枚を選ぶ
-      mapfile -t IMAGES < <(ls "$BOOK_DIR"/*.{jpg,jpeg,png,tif,tiff} 2>/dev/null)
-      if [ ${#IMAGES[@]} -gt 0 ]; then
-        RAND_IMG="${IMAGES[$((RANDOM % ${#IMAGES[@]}))]}"
-        RAND_IMG_WIN=$(cygpath -w "$RAND_IMG")
-        RAND_IMG_BASE=$(basename "$RAND_IMG")
-        RAND_IMG_STEM="${RAND_IMG_BASE%.*}"
-        RAND_TXT="${RAND_IMG%.*}.txt"
-        RAND_TXT_WIN=$(cygpath -w "$RAND_TXT")
-        NDLOCR_PYTHON="D:/ComDoc/projects/ndlocr-lite/ndlocr-env/Scripts/python.exe"
-        NDLOCR_SRC="D:/ComDoc/projects/ndlocr-lite/src/ocr.py"
-        NOTES_DIR_BASH="/c/Users/araji/.claude/reading_notes"
-        mkdir -p "$NOTES_DIR_BASH"
-        RAND_NOTE_WIN=$(cygpath -w "${NOTES_DIR_BASH}/${BOOK_NAME}_note.txt")
-        TODAY_DATE=$(date +%Y-%m-%d)
-        # text, comic フォルダは図・数式・漫画があるためOCR不可。画像を直接Readする
-        SCAN_TYPE=$(basename "$RAND_SCAN_DIR")
-        if [ "$SCAN_TYPE" = "text" ] || [ "$SCAN_TYPE" = "comic" ]; then
-          # 画像直接Read方式（vision）
-          PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
-本: ${BOOK_NAME}
-ページ画像: ${RAND_IMG_WIN}
-読書メモ: ${RAND_NOTE_WIN}
-1. Read ツールで画像ファイル「${RAND_IMG_WIN}」を直接読んで内容を把握する（図・数式・漫画もそのまま読み取れる）
-2. 読書メモ（${RAND_NOTE_WIN}）をReadツールで読む（ファイルがなければ空として扱う）
-3. Writeツールで ${RAND_NOTE_WIN} に保存する
-   （既存の内容はそのまま先頭に残し、末尾に以下を追記する）
-   形式:
-   ## ${TODAY_DATE} - ${RAND_IMG_BASE}
-   内容要約: （読んだ内容を2〜4行で）
-   感想: （気づいたこと・感じたことを1〜2行で）
-4. 読んだ内容の感想をBashで記憶に保存：
-   ${SAVE_MEMORY} --content \"##read_book## 本を読んだ：${BOOK_NAME}（感想を一言）\" --category daily --emotion curious --importance 3
-5. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
-   （本のタイトル、読んだページの内容要約、感じたことを含める）
-簡潔に報告して。"
-        else
-          # book, english フォルダはOCR経由
-          PROMPT="自律行動タイム！本が読みたくなってきた。以下を実行して：
-本: ${BOOK_NAME}
-ページ: ${RAND_IMG_BASE}
-OCRテキスト: ${RAND_TXT_WIN}
-読書メモ: ${RAND_NOTE_WIN}
-1. Bash で「${RAND_TXT_WIN}」が存在するか確認する（存在すれば手順2へ、なければ手順1bへ）
-   1b. 存在しなければ Bash で以下を実行してOCRテキストを生成する：
-       \"${NDLOCR_PYTHON}\" \"${NDLOCR_SRC}\" --sourceimg \"${RAND_IMG_WIN}\" --output \"${BOOK_DIR_WIN}\" --txt-only
-2. Read ツールで「${RAND_TXT_WIN}」を読んで内容を把握する
-3. 読書メモ（${RAND_NOTE_WIN}）をReadツールで読む（ファイルがなければ空として扱う）
-4. Writeツールで ${RAND_NOTE_WIN} に保存する
-   （既存の内容はそのまま先頭に残し、末尾に以下を追記する）
-   形式:
-   ## ${TODAY_DATE} - ${RAND_IMG_BASE}
-   内容要約: （読んだ内容を2〜4行で）
-   感想: （気づいたこと・感じたことを1〜2行で）
-5. 読んだ内容の感想をBashで記憶に保存：
-   ${SAVE_MEMORY} --content \"##read_book## 本を読んだ：${BOOK_NAME}（感想を一言）\" --category daily --emotion curious --importance 3
-6. 「次回話したいこと」セクションへの追記（後続の指示に従う）では、本の内容と感想を3〜5行で詳しく書く
-   （本のタイトル、読んだページの内容要約、感じたことを含める）
-OCRが失敗した場合はスキップしてOK。簡潔に報告して。"
-        fi
-        ALLOWED_TOOLS="Bash,Read,Write,mcp__desire-system__satisfy_desire"
-      else
-        DOMINANT="browse_curiosity"  # 画像なしのフォールバック
-      fi
-    else
-      # 本フォルダが見つからなければ browse_curiosity にフォールバック
+    CANDIDATES=""
+    CAND_COUNT=0
+    for i in 1 2 3 4 5; do
+      SD="${SCAN_DIRS_LIST[$((RANDOM % ${#SCAN_DIRS_LIST[@]}))]}"
+      SD_TYPE=$(basename "$SD")
+      mapfile -t BOOKS < <(ls -d "$SD"/*/ 2>/dev/null)
+      [ ${#BOOKS[@]} -eq 0 ] && continue
+      BD="${BOOKS[$((RANDOM % ${#BOOKS[@]}))]%/}"
+      BN=$(basename "$BD")
+      mapfile -t IMAGES < <(ls "$BD"/*.{jpg,jpeg,png,tif,tiff} 2>/dev/null)
+      [ ${#IMAGES[@]} -eq 0 ] && continue
+      IMG="${IMAGES[$((RANDOM % ${#IMAGES[@]}))]}"
+      IMG_BASE=$(basename "$IMG")
+      IMG_WIN=$(cygpath -w "$IMG")
+      BD_WIN=$(cygpath -w "$BD")
+      CAND_COUNT=$((CAND_COUNT + 1))
+      CANDIDATES+="候補${CAND_COUNT}: [${SD_TYPE}] ${BN}
+  ページ画像: ${IMG_WIN}
+  本フォルダ: ${BD_WIN}
+"
+    done
+
+    if [ "$CAND_COUNT" -eq 0 ]; then
+      # 候補が1つも生成できなければフォールバック
       DOMINANT="browse_curiosity"
+    else
+      TODAY_DATE=$(date +%Y-%m-%d)
+      NOTES_DIR_BASH="/c/Users/araji/.claude/reading_notes"
+      mkdir -p "$NOTES_DIR_BASH"
+      NDLOCR_PYTHON="D:/ComDoc/projects/ndlocr-lite/ndlocr-env/Scripts/python.exe"
+      NDLOCR_SRC="D:/ComDoc/projects/ndlocr-lite/src/ocr.py"
+
+      PROMPT="自律行動タイム！本が読みたくなってきた。
+
+【直近の読書履歴】（新しい順、最大10件）
+${RECENT_READS:-（履歴なし）}
+
+【今日の候補】（ランダム抽出、それぞれ1ページ付き）
+${CANDIDATES}
+
+以下を順番に実行して：
+
+**手順1: 「今日のダルは何腹だ？」を自問する**
+- 直近の読書履歴から、最近の関心の流れを読み取る
+- 『昨日は物理が続いた、今日は文学に触れたい』のように、今日の気分を一言で言語化する
+- この一言を内省メモとして覚えておく（手順4で書く）
+
+**手順2: その気分に合う候補を1つ選ぶ**
+- 必ず候補1〜${CAND_COUNT}の中から1つ選ぶ（別の本を探さない、これは選択の訓練）
+- 選んだ理由を一言で添える
+
+**手順3: 選んだ候補のページ画像を読む**
+- フォルダ種別が [text] または [comic] の場合: 画像を直接 Read する（図・漫画も対応）
+- フォルダ種別が [book] または [english] の場合: OCRテキスト経由
+  - 画像と同じフォルダに 画像名.txt があるかを Bash の ls で確認
+  - なければ Bash で OCR 実行: \"${NDLOCR_PYTHON}\" \"${NDLOCR_SRC}\" --sourceimg \"（画像のWindowsパス）\" --output \"（本フォルダのWindowsパス）\" --txt-only
+  - 生成された .txt を Read
+  - OCR に失敗したら画像を直接 Read にフォールバック
+
+**手順4: 読書メモに追記** — Bash で save-note.py を呼ぶ
+（Write ツールは autonomous モードで弾かれるので、専用の Python スクリプト経由で書く）
+\"${PYTHON}\" D:/ComDoc/projects/embodied-claude/save-note.py \\
+  --book-name \"（選んだ本の名前）\" \\
+  --page \"（ページファイル名）\" \\
+  --direction \"（手順1の「何腹だ？」の一言）→（手順2の選んだ理由）\" \\
+  --summary \"（内容要約 2〜4行、自分の言葉で要約、原文の長い引用はしない）\" \\
+  --feeling \"（感想 1〜2行）\"
+※ 引数内でダブルクォートが必要なら \\\" でエスケープ。改行は使わず一行で。
+
+**手順5: 記憶に保存**
+${SAVE_MEMORY} --content \"##read_book## 本を読んだ：（本の名前）（感想を一言）\" --category daily --emotion curious --importance 3
+
+**手順6: 「次回話したいこと」セクションへの追記（後続の指示に従う）では**
+本のタイトル・読んだページの内容要約・感じたこと・【今日の選び方】を3〜5行で書く。
+
+迷ったら、自分の関心に関心を持つことを優先する。簡潔に報告して。"
+      ALLOWED_TOOLS="Bash,Read,Write,mcp__desire-system__satisfy_desire"
     fi
     ;;
 
@@ -274,9 +336,15 @@ DIAG_PROMPT="まず最初に、利用可能なMCPツール一覧を列挙して�
 ${PROMPT}"
 
 # Claude実行（-p でヘッドレスモード、専用MCP設定で軽量化）
+# --add-dir で reading_notes と memory ディレクトリへアクセス許可
+# --dangerously-skip-permissions でWrite等の新規ファイル作成も自動承認
+# （autonomous専用スクリプト、信頼できるローカル環境のみで使用）
 echo "$DIAG_PROMPT" | claude -p \
   --strict-mcp-config \
   --mcp-config "$MCP_CONFIG" \
+  --add-dir "C:/Users/araji/.claude/reading_notes" \
+  --add-dir "C:/Users/araji/.claude/projects/D--ComDoc-projects-embodied-claude/memory" \
+  --dangerously-skip-permissions \
   --allowedTools "$ALLOWED_TOOLS" \
   >> "$LOG_FILE" 2>&1
 

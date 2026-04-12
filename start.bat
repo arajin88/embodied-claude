@@ -1,4 +1,4 @@
 @echo off
-REM ダル君起動スクリプト（Windows用）
-REM exit後にこれを実行するだけでOK（--continue + Discord channels）
+REM Dal-kun startup script (Windows)
+REM Run this after /exit to resume with --continue and Discord channel.
 claude --continue --channels plugin:discord@claude-plugins-official
