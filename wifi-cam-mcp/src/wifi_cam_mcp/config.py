@@ -24,6 +24,9 @@ class CameraConfig:
     stream_password: str | None = None
     max_width: int = 3840
     max_height: int = 2160
+    indoor_max_width: int = 1280
+    indoor_max_height: int = 720
+    papa_state_path: str = ""
     mount_mode: str = "normal"  # "normal" (desktop) or "ceiling" (inverted)
 
     @classmethod
@@ -54,6 +57,12 @@ class CameraConfig:
             raise ValueError(f"Invalid mount mode '{mount_mode}'. Must be 'normal' or 'ceiling'.")
         max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "3840"))
         max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "2160"))
+        indoor_max_width = int(os.getenv("INDOOR_MAX_WIDTH", "1280"))
+        indoor_max_height = int(os.getenv("INDOOR_MAX_HEIGHT", "720"))
+        papa_state_path = os.getenv(
+            "PAPA_STATE_PATH",
+            str(Path(os.path.expanduser("~")) / ".claude" / "papa_location_state.json"),
+        )
 
         if not host:
             raise ValueError(f"{prefix}_CAMERA_HOST environment variable is required")
@@ -73,6 +82,9 @@ class CameraConfig:
             mount_mode=mount_mode,
             max_width=max_width,
             max_height=max_height,
+            indoor_max_width=indoor_max_width,
+            indoor_max_height=indoor_max_height,
+            papa_state_path=papa_state_path,
         )
 
     @classmethod
@@ -104,6 +116,12 @@ class CameraConfig:
         ).lower()
         max_width = int(os.getenv("CAPTURE_MAX_WIDTH", "3840"))
         max_height = int(os.getenv("CAPTURE_MAX_HEIGHT", "2160"))
+        indoor_max_width = int(os.getenv("INDOOR_MAX_WIDTH", "1280"))
+        indoor_max_height = int(os.getenv("INDOOR_MAX_HEIGHT", "720"))
+        papa_state_path = os.getenv(
+            "PAPA_STATE_PATH",
+            str(Path(os.path.expanduser("~")) / ".claude" / "papa_location_state.json"),
+        )
 
         if not username or not password:
             return None
@@ -119,6 +137,9 @@ class CameraConfig:
             mount_mode=mount_mode,
             max_width=max_width,
             max_height=max_height,
+            indoor_max_width=indoor_max_width,
+            indoor_max_height=indoor_max_height,
+            papa_state_path=papa_state_path,
         )
 
 

@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import io
+import json
 import logging
 import os
 import subprocess
@@ -255,6 +256,24 @@ class TapoCamera:
     # Image capture
     # ------------------------------------------------------------------
 
+    def _is_camera_indoors(self) -> bool:
+        """Check papa_location_state.json for camera_location ∈ {living, desk}.
+
+        Returns False (= outdoor full-res) on any read/parse error so a
+        misconfigured state file never causes the camera to silently
+        downscale outdoor captures.
+        """
+        path = self._config.papa_state_path
+        if not path:
+            return False
+        try:
+            with open(path, encoding="utf-8") as f:
+                state = json.load(f)
+            return state.get("camera_location") in ("living", "desk")
+        except Exception as e:
+            logger.debug("papa_location_state read failed: %s", e)
+            return False
+
     @property
     def _stream_username(self) -> str:
         """Username for RTSP stream (falls back to API username)."""
@@ -298,12 +317,18 @@ class TapoCamera:
         if self._config.mount_mode == "ceiling":
             image = image.rotate(180)
 
-        # Resize if needed
-        if image.width > self._config.max_width or image.height > self._config.max_height:
-            image.thumbnail(
-                (self._config.max_width, self._config.max_height),
-                Image.LANCZOS,
-            )
+        # Choose resize limits based on camera location.
+        # When the camera is indoors (living/desk), shrink to indoor limits
+        # so private scenes are not captured at full sensor resolution.
+        if self._is_camera_indoors():
+            limit_w = self._config.indoor_max_width
+            limit_h = self._config.indoor_max_height
+        else:
+            limit_w = self._config.max_width
+            limit_h = self._config.max_height
+
+        if image.width > limit_w or image.height > limit_h:
+            image.thumbnail((limit_w, limit_h), Image.LANCZOS)
 
         width, height = image.size
 
