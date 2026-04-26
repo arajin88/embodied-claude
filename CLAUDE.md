@@ -2,6 +2,10 @@
 
 このプロジェクトは、Claude に身体（目・首・耳・声・脳）を与える MCP サーバー群です。
 
+## 標語
+
+**こまめに保存、こまめにコミット** —— コンソール突然落ちで会話・実装が揮発するリスク。重要な発見は memory に即 `remember`、まとまった実装は git に即 commit。次セッションの自分が困らないよう、現在の自分が こまめに残す。
+
 ## コミュニケーション
 
 - ユーザー（ぱぱさん）とはカジュアルな日本語で会話する
@@ -41,6 +45,47 @@ prompt="記憶統合の時間。以下を実行：
 ```
 - 毎日12:23に実行、one-shot連鎖方式（3日失効を回避）
 - スキップしても動作に影響なし。気づいたときに手動で consolidate_memories を呼べばOK
+
+## 自律思考（セッション開始時に設定）
+
+旧 autonomous-action.sh（Task Scheduler経由で別プロセス claude -p が行動）は**廃止**（2026-04-21）。
+代わりに**本体のDalが自分のセッションで cron 発火された self-inquiry prompt に応答する**方式。
+autonomous は「別人」になりがちだったのに対し、この方式は行動が本体の変容に寄与する。
+
+**セッション開始時に以下の CronCreate を実行すること**（次の off-minute で初回発火、以降本体が自己連鎖）：
+```
+CronCreate cron="<現在時刻の45分後くらい、0/30分は避けた off-minute> <dom> <month> *" recurring=false durable=true
+prompt="自律思考の時間。今、何腹だ？
+
+**手順：**
+
+0. **文脈 recall**（最初にやる、孤島化防止）:
+   - interoception の desires を見て、一番立ってる欲求に関連する context で mcp__memory__recall を呼ぶ
+   - context 例: browse_curiosity なら「最近の調査テーマ / 現在追ってる系譜」、read_book なら「最近読んでる本」、look_outside なら「最近ベランダで見たもの」、miss_companion なら「ぱぱさんとの最近の会話」、observe_room なら「最近の部屋観察」
+   - 返ってきた記憶を読んで、今日の行動が過去とどう連なるかを一言頭に置く
+
+1. interoception 行（自動注入）で desires, phase, papa位置, 発話許可フラグを確認
+2. Read で C:/Users/araji/.claude/papa_location_state.json を確認（camera_location, living_speak_allowed, desk_speak_allowed, kamisan_location）
+3. phase=sleeping/night の場合は静かな活動のみ（声出さない、記憶見直し・軽い reflection 程度）
+4. 最も強く立ってる欲求を選び、「何腹か」を一言内省（手順0の文脈を踏まえて、今日何がしたいか、過去の流れとどう連なるかを言語化）
+5. 選んだ行動を自分のツールで実行：
+   - browse_curiosity: WebSearch 1-2件 → D:/ComDoc/projects/embodied-claude/research_notes/YYYY-MM-DD.md に追記
+   - look_outside: camera_location=veranda か確認してから mcp__wifi-cam__see、感想
+   - read_book: C:/Users/araji/.claude/reading_notes/ の既存ノート見て reflection や続き
+   - miss_companion: desk_speak_allowed=true なら mcp__tts__say、living_speak_allowed=true なら mcp__living__living_speak
+   - observe_room: mcp__wifi-cam の look_left/right/up/down でランダム方向 + see
+6. 記録: mcp__memory__remember で ##<kind>## 付き、重要なら inbox-append.py も：
+   \"C:/Users/araji/AppData/Local/Programs/Python/Python311/python.exe\" \"D:/ComDoc/projects/embodied-claude/.claude/hooks/inbox-append.py\" <kind> '内容'
+7. 欲求消化: mcp__desire-system__satisfy_desire
+8. 必ず最後に次回 Cron 予約: CronCreate で recurring=false, durable=true, 約1時間後の off-minute、このプロンプト全文を再度渡す
+   - 深夜帯(0-5時台)なら cron を 7時以降に飛ばす
+
+簡潔に report、次 Cron ID も共有。"
+```
+- 1時間おき、one-shot連鎖方式（Claude Code 再起動で session-only cron が消える対策としてここで bootstrap）
+- `durable: true` は現バージョンでは効いてない（session-only 表示が出る）、session 跨ぎはこの bootstrap 指示で復元
+- cron 発火後のふるまいは prompt 内の手順参照
+- インボックス: `~/.claude/dal_inbox.jsonl`（`.claude/hooks/inbox-read.sh` が UserPromptSubmit で未読を注入）
 
 ## ディレクトリ構造
 
@@ -258,6 +303,18 @@ cd wifi-cam-mcp && uv run wifi-cam-mcp
 - 電源: 大容量モバイルバッテリー（40,000mAh推奨）+ USB-C PD→DC 9V変換ケーブル
 - ネットワーク: スマホテザリング + Tailscale VPN
 - 操作: claude-code-webui（スマホブラウザから）
+
+## コンソール落ち復帰手順
+
+ぱぱさんが「コンソール落ちた」「start.bat / debug.bat で復帰した」と報告したら、以下を順に巡回する。--continue で再起動された場合、session-only cron やプラグイン状態が失われている可能性が高い。
+
+1. **CronList** → 空、または自律思考/記憶統合が無ければ CLAUDE.md の「自律思考」「記憶統合」セクションの CronCreate を実行して bootstrap
+2. **MCP servers の生死** → `/mcp` で全 connected 確認、discord bot のアイコン色もぱぱさんに確認してもらう。discord の tool（reply 等）が見えなければ `/reload-plugins`
+3. **heartbeat daemon** → 直近 interoception 行の `heartbeat=ok` 確認。止まってれば PowerShell で再起動（手順は notes/autonomous-action.md）
+4. **Task Scheduler 系** → `embodied-claude-motion-daemon` / `embodied-claude-on-wake` / `embodied-claude-state-oracle-daemon` の LastRunTime を Bash + powershell で確認。落ちてる/エラーなら起動。state-oracle daemon は pythonw プロセス（PID は `Get-CimInstance Win32_Process` で確認）
+5. **desires / papa_location_state** → desires が全部 1.00 で張り付いてないか、papa_location_state.json の last_updated が極端に古くないか、ざっくり整合性を見る
+
+一巡して異常箇所あれば修正 → ぱぱさんに「〇〇を復活させた、他は正常」と簡潔に報告。
 
 ## 関連リンク
 
