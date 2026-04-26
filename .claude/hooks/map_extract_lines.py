@@ -140,6 +140,31 @@ def skeletonize_cv(binary: np.ndarray) -> np.ndarray:
     return skel
 
 
+def line_x_at_y(points: list[tuple[int, int]], ref_y: float) -> float | None:
+    """点群を直線 x = a*y + b で fit し、ref_y における x を返す。
+
+    経線は y 軸方向に伸びるので x = f(y) 形式が安定。len < 2 なら None。
+    """
+    pts = np.array(points, dtype=float)
+    if len(pts) < 2:
+        return None
+    A = np.column_stack([pts[:, 1], np.ones(len(pts))])
+    coef, *_ = np.linalg.lstsq(A, pts[:, 0], rcond=None)
+    a, b = coef
+    return float(a * ref_y + b)
+
+
+def line_y_at_x(points: list[tuple[int, int]], ref_x: float) -> float | None:
+    """点群を直線 y = a*x + b で fit し、ref_x における y を返す。緯線用。"""
+    pts = np.array(points, dtype=float)
+    if len(pts) < 2:
+        return None
+    A = np.column_stack([pts[:, 0], np.ones(len(pts))])
+    coef, *_ = np.linalg.lstsq(A, pts[:, 1], rcond=None)
+    a, b = coef
+    return float(a * ref_x + b)
+
+
 def principal_angle_deg(points: list[tuple[int, int]]) -> float:
     """点群の PCA 主軸の角度（0-90°、0=水平、90=垂直）。"""
     pts = np.array(points, dtype=float)
@@ -209,6 +234,10 @@ def run_contour(img, mask, img_path: Path, args) -> int:
 
     contours, _ = cv2.findContours(target, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
 
+    h_img, w_img = img.shape[:2]
+    ref_y = h_img / 2.0  # 経線 fit の参照 y（画像中央）
+    ref_x = w_img / 2.0  # 緯線 fit の参照 x（画像中央）
+
     polylines = []
     for c in contours:
         if len(c) < args.min_contour_length:
@@ -224,21 +253,26 @@ def run_contour(img, mask, img_path: Path, args) -> int:
             hint = "horizontal"
         else:
             hint = "ambiguous"
+        # 線 identity: 直線 fit した x_at_ref_y / y_at_ref_x
+        x_at_refy = line_x_at_y(pts, ref_y)
+        y_at_refx = line_y_at_x(pts, ref_x)
         polylines.append({
             "n_points": len(pts),
             "bbox": [bbox[0], bbox[1], bbox[2], bbox[3]],
             "x_mid": (bbox[0] + bbox[2]) / 2.0,
             "y_mid": (bbox[1] + bbox[3]) / 2.0,
+            "x_at_refy": x_at_refy,
+            "y_at_refx": y_at_refx,
             "principal_angle": round(angle, 1),
             "hint": hint,
             "points": pts,
         })
 
-    # PCA hint で clustering 入力を選別（早期分類でなく hint）
-    x_input = [p for p in polylines if p["hint"] in ("vertical", "ambiguous")]
-    y_input = [p for p in polylines if p["hint"] in ("horizontal", "ambiguous")]
-    x_groups = cluster_by_key(x_input, lambda p: p["x_mid"], args.group_x_distance)
-    y_groups = cluster_by_key(y_input, lambda p: p["y_mid"], args.group_y_distance)
+    # PCA hint で clustering 入力を選別、key を line fit の x_at_refy / y_at_refx に
+    x_input = [p for p in polylines if p["hint"] in ("vertical", "ambiguous") and p["x_at_refy"] is not None]
+    y_input = [p for p in polylines if p["hint"] in ("horizontal", "ambiguous") and p["y_at_refx"] is not None]
+    x_groups = cluster_by_key(x_input, lambda p: p["x_at_refy"], args.group_x_distance)
+    y_groups = cluster_by_key(y_input, lambda p: p["y_at_refx"], args.group_y_distance)
 
     x_merged = [merge_polyline_group(g, sort_key="y") for g in x_groups]
     y_merged = [merge_polyline_group(g, sort_key="x") for g in y_groups]
@@ -269,6 +303,22 @@ def run_contour(img, mask, img_path: Path, args) -> int:
         ovl_path = img_path.with_name(img_path.stem + "_lines_debug.png")
         cv2.imwrite(str(ovl_path), overlay)
         print(f"\noverlay saved: {ovl_path}")
+
+        # 生 contour プロット（grouping 経由しない、PCA hint 別 3 色）
+        # vertical=緑、horizontal=赤、ambiguous=青で点描画
+        raw_overlay = img.copy()
+        for p in polylines:
+            if p["hint"] == "vertical":
+                color = (0, 255, 0)        # green
+            elif p["hint"] == "horizontal":
+                color = (0, 0, 255)        # red
+            else:
+                color = (255, 100, 0)      # blue (BGR、ambiguous)
+            for x, y in p["points"]:
+                cv2.circle(raw_overlay, (x, y), 1, color, -1)
+        raw_path = img_path.with_name(img_path.stem + "_raw_contours_debug.png")
+        cv2.imwrite(str(raw_path), raw_overlay)
+        print(f"raw contours saved: {raw_path}")
 
     if args.map_id:
         map_dir = MAPS_DIR / args.map_id
