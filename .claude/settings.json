@@ -5,8 +5,47 @@
         "hooks": [
           {
             "type": "command",
-            "command": ".claude/hooks/interoception.sh",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/interoception.sh",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/inbox-read.sh",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "\"C:/Users/araji/AppData/Local/Programs/Python/Python311/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/state_tracker_enqueue.py\"",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/recent-actions.sh"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"D:/ComDoc/projects/embodied-claude/.venv/Scripts/python.exe\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/pending-commitments-surface.py\""
           }
         ]
       }
