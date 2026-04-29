@@ -62,53 +62,105 @@ def in_bbox(lat, lon, bbox):
 
 
 def sample_warning_boundary(lat0, lon0, axes, n=72):
-    """中心 + axes (direction_deg + radius_nm) → 境界 (lat, lon) を n 点サンプリング"""
-    pts = []
+    """JMA 規定: 2 軸の端点を結んだ線分を直径とする円を描画（台風も同方式、papa 4/29 教示）
+
+    - 1 軸 (description=全域): BasePoint 中心の真円
+    - 2 軸: 各 axis の端点を線分で結び、その中点を中心に、線分長を直径とする真円
+    - 3 軸以上 (まれ): 隣接ペアで 4-quadrant 分割（未対応、線形重み fallback）
+    """
     valid_axes = [a for a in axes if a.get("direction_deg") is not None and a.get("radius_nm") is not None]
     if not valid_axes:
-        return pts
-    for i in range(n):
-        theta = i * 360.0 / n  # deg from N, clockwise
-        if len(valid_axes) == 1:
-            r_nm = valid_axes[0]["radius_nm"]
-        else:
-            ws, rs = [], []
-            for ax in valid_axes:
-                d = abs(theta - ax["direction_deg"])
-                d = min(d, 360 - d)  # ∈ [0, 180]
-                w = (180 - d) / 180.0  # 近いほど大
-                ws.append(w)
-                rs.append(ax["radius_nm"])
-            total_w = sum(ws)
-            r_nm = sum(w * r for w, r in zip(ws, rs)) / total_w if total_w > 0 else sum(rs) / len(rs)
+        return []
+
+    cos_lat0 = math.cos(math.radians(lat0))
+
+    def offset(theta_deg, r_nm):
+        """中心 (lat0, lon0) から方位 + 半径(nm) → 端点 (lat, lon)"""
         r_km = r_nm * 1.852
-        rad = math.radians(theta)
+        rad = math.radians(theta_deg)
         dlat = (r_km / 111.0) * math.cos(rad)
-        cos_lat = math.cos(math.radians(lat0))
-        dlon = (r_km / (111.0 * max(0.1, cos_lat))) * math.sin(rad)
-        pts.append((lat0 + dlat, lon0 + dlon))
+        dlon = (r_km / (111.0 * max(0.1, cos_lat0))) * math.sin(rad)
+        return (lat0 + dlat, lon0 + dlon)
+
+    # 1 軸 (全域): 真円
+    if len(valid_axes) == 1:
+        r_nm = valid_axes[0]["radius_nm"]
+        return _sample_circle(lat0, lon0, r_nm * 1.852, n)
+
+    # 2 軸: JMA 規定の off-center 真円（線分の中点 + 線分長/2）
+    if len(valid_axes) == 2:
+        a, b = valid_axes
+        p_a = offset(a["direction_deg"], a["radius_nm"])
+        p_b = offset(b["direction_deg"], b["radius_nm"])
+        mid_lat = (p_a[0] + p_b[0]) / 2
+        mid_lon = (p_a[1] + p_b[1]) / 2
+        cos_mid = math.cos(math.radians(mid_lat))
+        # 線分長 (km)
+        dlat_diff_km = (p_a[0] - p_b[0]) * 111.0
+        dlon_diff_km = (p_a[1] - p_b[1]) * 111.0 * cos_mid
+        diameter_km = math.sqrt(dlat_diff_km ** 2 + dlon_diff_km ** 2)
+        radius_km = diameter_km / 2
+        return _sample_circle(mid_lat, mid_lon, radius_km, n)
+
+    # 3 軸以上: 線形重み fallback（旧実装相当）
+    pts = []
+    for i in range(n):
+        theta = i * 360.0 / n
+        ws, rs = [], []
+        for ax in valid_axes:
+            d = abs(theta - ax["direction_deg"])
+            d = min(d, 360 - d)
+            ws.append((180 - d) / 180.0)
+            rs.append(ax["radius_nm"])
+        total_w = sum(ws)
+        r_nm = sum(w * r for w, r in zip(ws, rs)) / total_w if total_w > 0 else sum(rs) / len(rs)
+        pts.append(offset(theta, r_nm))
+    return pts
+
+
+def _sample_circle(center_lat, center_lon, radius_km, n=72):
+    """中心 + 半径(km) で真円を n 点サンプリング"""
+    cos_lat = math.cos(math.radians(center_lat))
+    pts = []
+    for i in range(n):
+        theta = i * 360.0 / n
+        rad = math.radians(theta)
+        dlat = (radius_km / 111.0) * math.cos(rad)
+        dlon = (radius_km / (111.0 * max(0.1, cos_lat))) * math.sin(rad)
+        pts.append((center_lat + dlat, center_lon + dlon))
     return pts
 
 
 def clip_polygon_to_bbox(latlon_pts, bbox, w, h):
-    """polygon の lat/lon 列を image (x, y) 列に変換、bbox 外は除外（端は近似クリップ）"""
-    xy = []
-    for lat, lon in latlon_pts:
-        # 緯度・経度をクランプ（bbox 端で切り捨て近似）
-        lat_c = max(bbox["lat_min"], min(bbox["lat_max"], lat))
-        lon_c = max(bbox["lon_min"], min(bbox["lon_max"], lon))
-        xy.append(latlon_to_xy(lat_c, lon_c, bbox, w, h))
-    # すべてが bbox 外なら描かない
-    if all(not in_bbox(lat, lon, bbox) for lat, lon in latlon_pts):
+    """polygon の lat/lon 列を image (x, y) 列に変換。bbox 外頂点もそのままピクセル座標化、
+    PIL の canvas 外描画は自動で clip される。clamp すると polygon が歪むので避ける。
+
+    日付変更線（lon=180/-180）横断の対応:
+      bbox の lon 範囲が東経内なら lon < 0 の頂点に +360 を加えて連続化
+      （例: 北太平洋の polygon が 51N+156E から 51N-179E へ → 51N+181E に wrap）
+
+    全頂点が bbox 外なら空 list（描画なし）。
+    """
+    pts = list(latlon_pts)
+    # bbox が東経域 (lon_min > 0) で polygon に lon < 0 が混じってたら +360 で連続化
+    if bbox["lon_min"] > 0 and any(lon < 0 for _, lon in pts):
+        pts = [(lat, lon + 360 if lon < 0 else lon) for lat, lon in pts]
+    if not any(in_bbox(lat, lon, bbox) for lat, lon in pts):
         return []
-    return xy
+    return [latlon_to_xy(lat, lon, bbox, w, h) for lat, lon in pts]
 
 
-def draw_polygon(draw, xy, fill, outline):
+def draw_polygon(canvas, xy, fill, outline):
+    """canvas (RGBA Image) に polygon を alpha_composite で重ね描き。
+    PIL の draw.polygon は上書き動作で alpha ブレンドしないので、polygon ごとに
+    透明 layer を作って alpha_composite する。複数 polygon が重なる領域で fill 色が混ざる。"""
     if len(xy) < 3:
         return
     flat = [(int(p[0]), int(p[1])) for p in xy]
-    draw.polygon(flat, fill=fill, outline=outline)
+    layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    ld = ImageDraw.Draw(layer)
+    ld.polygon(flat, fill=fill, outline=outline)
+    canvas.alpha_composite(layer)
 
 
 def render_marine_warnings(parsed: dict, code: str = "00") -> Image.Image:
@@ -138,40 +190,40 @@ def render_marine_warnings(parsed: dict, code: str = "00") -> Image.Image:
             if area.get("polygon"):
                 xy = clip_polygon_to_bbox(area["polygon"], bbox, W, H)
                 if xy:
-                    draw_polygon(d, xy, style["fill"], style["outline"])
-                    cx = sum(p[0] for p in xy) / len(xy)
-                    cy = sum(p[1] for p in xy) / len(xy)
+                    draw_polygon(canvas, xy, style["fill"], style["outline"])
+                    # ラベル位置は bbox 内頂点のみで重心、無ければ全頂点の重心、最後に canvas 内 clamp
+                    in_pts = [p for p in xy if 0 <= p[0] <= W and 0 <= p[1] <= H]
+                    pts_for_label = in_pts if in_pts else xy
+                    cx = sum(p[0] for p in pts_for_label) / len(pts_for_label)
+                    cy = sum(p[1] for p in pts_for_label) / len(pts_for_label)
+                    cx = max(20, min(W - 60, cx))
+                    cy = max(20, min(H - 30, cy))
                     label_positions.append((cx, cy, style["label"]))
             # Circle 系（中心 + 4方位）
             for circ in area.get("circles", []):
                 if circ.get("lat") is None or circ.get("lon") is None or not circ.get("axes"):
+                    continue
+                base_type = circ.get("base_type") or ""
+                # 予報円（12h / 24h 後位置）は実況 viewer に出さない（papa 4/29 17:27 判断:
+                # 実況画面で予報検証するのは筋悪い、verification は別 view で）
+                if "１２時間後" in base_type or "２４時間後" in base_type:
                     continue
                 bnd = sample_warning_boundary(circ["lat"], circ["lon"], circ["axes"])
                 if not bnd:
                     continue
                 xy = clip_polygon_to_bbox(bnd, bbox, W, H)
                 if xy:
-                    # 12h/24h 後は薄く
                     fill = style["fill"]
                     outline = style["outline"]
-                    if "１２時間後" in (circ.get("base_type") or "") or "２４時間後" in (circ.get("base_type") or ""):
-                        # alpha を半分に
-                        fill = (fill[0], fill[1], fill[2], fill[3] // 2)
-                        outline = (outline[0], outline[1], outline[2], outline[3] // 2)
-                    draw_polygon(d, xy, fill, outline)
-                    # ラベル位置：中心
+                    draw_polygon(canvas, xy, fill, outline)
+                    # ラベル位置：実況中心（予報円は描画しないので suffix なし）
                     cx, cy = latlon_to_xy(
                         max(bbox["lat_min"], min(bbox["lat_max"], circ["lat"])),
                         max(bbox["lon_min"], min(bbox["lon_max"], circ["lon"])),
                         bbox, W, H
                     )
                     if 0 <= cx <= W and 0 <= cy <= H:
-                        suffix = ""
-                        if "１２時間後" in (circ.get("base_type") or ""):
-                            suffix = "+12h"
-                        elif "２４時間後" in (circ.get("base_type") or ""):
-                            suffix = "+24h"
-                        label_positions.append((cx, cy, f"{style['label']}{suffix}"))
+                        label_positions.append((cx, cy, style["label"]))
 
     # ラベル描画（背景白塗り）
     for x, y, text in label_positions:
