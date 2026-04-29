@@ -203,6 +203,24 @@ def render_for_area(chart: dict, code: str) -> Image.Image:
             continue
         draw_center("台", lat, lon, ty.get("hPa"), FRONT_COLORS["typhoon"])
 
+    # 解析時刻のスタンプ（右下、a00 では rain legend が左上なので bottom-right に置く）
+    valid_at = chart.get("valid_at")
+    if valid_at:
+        try:
+            dt = datetime.fromisoformat(valid_at.replace("Z", "+00:00"))
+            dt_jst = dt.astimezone(timezone(timedelta(hours=9)))
+            stamp = f"ASAS {dt_jst.strftime('%m/%d %H:%M')} JST"
+        except ValueError:
+            stamp = f"ASAS {valid_at}"
+        try:
+            tw = font.getlength(stamp)
+        except Exception:
+            tw = len(stamp) * 11
+        x = W - int(tw) - 16
+        y = H - 32  # 右下、海上警報スタンプはこの上
+        d.rectangle([x - 4, y - 2, x + int(tw) + 4, y + 24], fill=(255, 255, 255, 220))
+        d.text((x, y), stamp, fill=(20, 20, 20, 255), font=font)
+
     return canvas
 
 

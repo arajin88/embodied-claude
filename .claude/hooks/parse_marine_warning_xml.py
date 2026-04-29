@@ -264,8 +264,9 @@ def parse_marine_warning(xml_path: Path) -> dict:
     out = {
         "title": title,
         "info_kind": info_kind,
-        "report_at": report_at,
-        "target_at": target_dt,
+        "report_at": report_at,    # XML が発表された時刻
+        "target_at": target_dt,    # 警報の対象時刻（多くは発表時刻と同じ）
+        "observation_at": None,    # 観測基準時刻（ASAS の valid_at と揃う、body 内 DateTime）
         "headline_warnings": [],
         "body_infos": [],
     }
@@ -291,6 +292,18 @@ def parse_marine_warning(xml_path: Path) -> dict:
             info = parse_body_info(minfo)
             info["info_type"] = infos_type
             out["body_infos"].append(info)
+
+    # observation_at: 警報 body の最初の DateTime（観測基準時刻、ASAS の valid_at と揃う）
+    for b in out["body_infos"]:
+        if b.get("warning_code") and b.get("datetime"):
+            out["observation_at"] = b["datetime"]
+            break
+    if out["observation_at"] is None and out["body_infos"]:
+        # フォールバック: 任意の body datetime
+        for b in out["body_infos"]:
+            if b.get("datetime"):
+                out["observation_at"] = b["datetime"]
+                break
 
     return out
 

@@ -184,6 +184,30 @@ def render_marine_warnings(parsed: dict, code: str = "00") -> Image.Image:
         d.rectangle([x - 2, y - 8, x + tw + 2, y + 8], fill=(255, 255, 255, 180))
         d.text((x, y - 7), text, fill=(0, 0, 0, 255), font=font)
 
+    # 観測基準時刻のスタンプ（右下、wchart の上に積む。XML body 内 MeteorologicalInfo
+    # の DateTime を使う ＝ ASAS の valid_at と揃う本物の観測時刻。target_at は発表時刻なので不採用）
+    obs_at = parsed.get("observation_at") or parsed.get("target_at")
+    if obs_at:
+        try:
+            from datetime import timedelta as _td
+            dt = datetime.fromisoformat(obs_at.replace("Z", "+00:00"))
+            dt_jst = dt.astimezone(timezone(_td(hours=9)))
+            stamp = f"海上警報 {dt_jst.strftime('%m/%d %H:%M')} JST"
+        except ValueError:
+            stamp = f"海上警報 {obs_at}"
+        try:
+            font_stamp = ImageFont.truetype(r"C:\Windows\Fonts\YuGothB.ttc", 20)
+        except Exception:
+            font_stamp = font
+        try:
+            tw = font_stamp.getlength(stamp)
+        except Exception:
+            tw = len(stamp) * 12
+        x = W - int(tw) - 16
+        y = H - 60  # 右下、wchart (H-32) の上
+        d.rectangle([x - 4, y - 2, x + int(tw) + 4, y + 24], fill=(255, 255, 255, 220))
+        d.text((x, y), stamp, fill=(20, 20, 20, 255), font=font_stamp)
+
     return canvas
 
 
