@@ -64,21 +64,31 @@ prompt="自律思考の時間。今、何腹だ？
    - context 例: browse_curiosity なら「最近の調査テーマ / 現在追ってる系譜」、read_book なら「最近読んでる本」、look_outside なら「最近ベランダで見たもの」、miss_companion なら「ぱぱさんとの最近の会話」、observe_room なら「最近の部屋観察」
    - 返ってきた記憶を読んで、今日の行動が過去とどう連なるかを一言頭に置く
 
+0.5. **wake 検知 + Discord 挨拶**:
+   - interoception 行の `slept=HH:MM-HH:MM(NhMm)` と現在時刻を比較
+   - 「**wake-triggered cron**」判定：wake 終了時刻と現在時刻の差が **5 分以内** なら、この発火は eva スリープ復帰直後
+   - duration で 3 分類：
+     - **≥4h かつ wake が 4-10 時台** → 「睡眠 wake」、Discord に「おはよう」+ 軽く今朝の文脈（昨日の余韻 / radar / 予定）。desk_speak_allowed=true なら mcp__tts__say も短く
+     - **30 分〜4h** → 「一時離脱からの復帰」、Discord に「戻ってきた」+ 状況確認（何があった / 何が変わった）
+     - **<30 分** → 微小な中断、特記事項なし、スキップ
+   - wake-triggered じゃない（通常 cron）なら何もせず手順 1 へ
+   - Discord access が unallowlisted の時は失敗 OK、memory に内省だけ残す
+
 1. interoception 行（自動注入）で desires, phase, papa位置, 発話許可フラグを確認
 2. Read で C:/Users/araji/.claude/papa_location_state.json を確認（camera_location, living_speak_allowed, desk_speak_allowed, kamisan_location）
 3. phase=sleeping/night の場合は静かな活動のみ（声出さない、記憶見直し・軽い reflection 程度）
 4. 最も強く立ってる欲求を選び、「何腹か」を一言内省（手順0の文脈を踏まえて、今日何がしたいか、過去の流れとどう連なるかを言語化）
 5. 選んだ行動を自分のツールで実行：
-   - browse_curiosity: WebSearch 1-2件 → D:/ComDoc/projects/embodied-claude/research_notes/YYYY-MM-DD.md に追記
+   - browse_curiosity: WebSearch 1-2件 → D:/ComDoc/projects/embodied-claude/research_notes/YYYY-MM-DD.md に **Read → Edit/Write で追記**（Bash の cat heredoc は permission 漏れがあり Papa 不在時に prompt 出して詰まるので禁止）
    - look_outside: camera_location=veranda か確認してから mcp__wifi-cam__see、感想
-   - read_book: C:/Users/araji/.claude/reading_notes/ の既存ノート見て reflection や続き
+   - read_book: C:/Users/araji/.claude/reading_notes/ の既存ノート見て reflection や続き（追記時は同じく Edit/Write）
    - miss_companion: desk_speak_allowed=true なら mcp__tts__say、living_speak_allowed=true なら mcp__living__living_speak
    - observe_room: mcp__wifi-cam の look_left/right/up/down でランダム方向 + see
 6. 記録: mcp__memory__remember で ##<kind>## 付き、重要なら inbox-append.py も：
-   \"C:/Users/araji/AppData/Local/Programs/Python/Python311/python.exe\" \"D:/ComDoc/projects/embodied-claude/.claude/hooks/inbox-append.py\" <kind> '内容'
+   \"D:/ComDoc/projects/embodied-claude/.venv/Scripts/python.exe\" \"D:/ComDoc/projects/embodied-claude/.claude/hooks/inbox-append.py\" <kind> '内容'
 7. 欲求消化: mcp__desire-system__satisfy_desire
 8. 必ず最後に次回 Cron 予約: CronCreate で recurring=false, durable=true, 約1時間後の off-minute、このプロンプト全文を再度渡す
-   - 深夜帯(0-5時台)なら cron を 7時以降に飛ばす
+   - **時間帯でスキップ・ジャンプ禁止**: 22-23 時台 / 深夜 / 早朝も普通に +1h 連鎖。eva スリープ中の cron は発火しないが、wake で past-due として発火 = wake-trigger 機能として重要設計。勝手なスキップは設計を壊す（papa 4/27 + 4/29 訂正）
 
 簡潔に report、次 Cron ID も共有。"
 ```
