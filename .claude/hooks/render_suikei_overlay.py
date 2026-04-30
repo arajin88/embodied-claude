@@ -27,7 +27,11 @@ try:
 except Exception:
     pass
 
+import numpy as np
 from PIL import Image
+
+sys.path.insert(0, str(Path(__file__).parent))
+from suikei_palette import apply_nd_fill, get_nd_fill, is_palette_ready
 
 SUIKEI_ROOT = Path("D:/jma_archive/suikei")
 FORECAST_ROOT = Path("D:/jma_archive/forecast")
@@ -61,6 +65,11 @@ def render(element: str, basetime: str, jma_z: int) -> Path | None:
     if not tile_dir.exists():
         print(f"tile dir missing: {tile_dir}", file=sys.stderr)
         return None
+
+    if not is_palette_ready(element):
+        print(f"  [error] {element} palette 未実測。suikei_palette.py に追加してから再 render", file=sys.stderr)
+        return None
+    nd_fill = get_nd_fill(element)
 
     canvas = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     wm_z = jma_z - 1
@@ -101,9 +110,23 @@ def render(element: str, basetime: str, jma_z: int) -> Path | None:
         if x_r < 0 or x_l > W or y_b < 0 or y_t > H:
             continue
         tile_img = Image.open(png).convert("RGBA")
+        # ND（alpha=0、推計対象外＝海上 / 海外）を element 毎の fill 色で塗装
+        # ground truth: wthr palette は 7 値 ((0,0,0,0)/(255,255,255,0)/曇/雨/晴/雪/みぞれ)
+        # → suikei_palette.py に集約、apply_nd_fill で in-place 塗り (4/30)
+        arr = np.array(tile_img)
+        arr = apply_nd_fill(arr, nd_fill)
+        tile_img = Image.fromarray(arr)
         tile_resized = tile_img.resize((target_w, target_h), Image.NEAREST)
         canvas.paste(tile_resized, (x_l, y_t), tile_resized)
         n_paste += 1
+
+    # render 結果検証: non-transparent pixel が 0 なら silent failure 扱い
+    arr = np.array(canvas)
+    nontransp = int(np.sum(arr[:, :, 3] > 0))
+    if nontransp == 0:
+        print(f"  [error] render result is all transparent ({n_paste} tiles pasted but 0 px data)", file=sys.stderr)
+        print(f"  source tiles likely all empty, skipping save: {tile_dir}", file=sys.stderr)
+        return None
 
     # JST date for output path
     dt_utc = datetime.strptime(basetime, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
@@ -112,7 +135,7 @@ def render(element: str, basetime: str, jma_z: int) -> Path | None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"suikei_{element}_{basetime}_a00.png"
     canvas.save(out_path)
-    print(f"  rendered {n_paste} tiles → {out_path}")
+    print(f"  rendered {n_paste} tiles, {nontransp} px data → {out_path}")
     return out_path
 
 

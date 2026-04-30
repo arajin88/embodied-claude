@@ -112,14 +112,14 @@ def scan_wchart() -> list[dict]:
     return entries
 
 
-def scan_suikei_wthr() -> list[dict]:
-    """suikei_wthr_*.png を集めて basetime をそのまま valid_utc として記録（実況のみ）"""
-    pat = re.compile(r"^suikei_wthr_(\d{14})_a00\.png$")
+def scan_suikei(element: str) -> list[dict]:
+    """suikei_<element>_*.png を集めて basetime をそのまま valid_utc として記録（実況のみ）"""
+    pat = re.compile(rf"^suikei_{re.escape(element)}_(\d{{14}})_a00\.png$")
     base = ARCH_ROOT / "japan"
     entries = []
     if not base.exists():
         return entries
-    for path in base.rglob("suikei_wthr_*_a00.png"):
+    for path in base.rglob(f"suikei_{element}_*_a00.png"):
         m = pat.match(path.name)
         if not m:
             continue
@@ -161,27 +161,22 @@ def scan_mwarn() -> list[dict]:
 
 def main() -> int:
     idx = {
-        "wchart":      {"japan": scan_wchart()},
-        "mwarn":       {"japan": scan_mwarn()},
-        "suikei_wthr": {"japan": scan_suikei_wthr()},
+        "wchart":        {"japan": scan_wchart()},
+        "mwarn":         {"japan": scan_mwarn()},
+        "suikei_wthr":   {"japan": scan_suikei("wthr")},
+        "suikei_temp":   {"japan": scan_suikei("temp")},
+        "suikei_suns1h": {"japan": scan_suikei("suns1h")},
     }
     ARCH_ROOT.mkdir(parents=True, exist_ok=True)
     json_text = json.dumps(idx, ensure_ascii=False, indent=2)
     INDEX_JSON_PATH.write_text(json_text, encoding="utf-8")
     INDEX_JS_PATH.write_text(f"window.CHART_INDEX = {json_text};\n", encoding="utf-8")
-    nw = len(idx["wchart"]["japan"])
-    nm = len(idx["mwarn"]["japan"])
     print(f"saved {INDEX_JSON_PATH}")
     print(f"saved {INDEX_JS_PATH}")
-    print(f"  wchart/japan: {nw} entries (valid_utc 由来)")
-    print(f"  mwarn/japan:  {nm} entries")
-    # 妥当性確認: いくつかのエントリで valid_utc と file_utc の差を出す
-    if idx["wchart"]["japan"]:
-        e = idx["wchart"]["japan"][-1]
-        print(f"  latest wchart: valid={e['valid_utc']} file={e['file_utc']}")
-    if idx["mwarn"]["japan"]:
-        e = idx["mwarn"]["japan"][-1]
-        print(f"  latest mwarn:  valid={e['valid_utc']} file={e['file_utc']}")
+    for k in idx:
+        n = len(idx[k]["japan"])
+        latest = idx[k]["japan"][-1]["valid_utc"] if n else "n/a"
+        print(f"  {k}/japan: {n} entries (latest valid_utc={latest})")
     return 0
 
 
