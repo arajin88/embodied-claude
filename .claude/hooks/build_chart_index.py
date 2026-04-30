@@ -112,6 +112,29 @@ def scan_wchart() -> list[dict]:
     return entries
 
 
+def scan_suikei_wthr() -> list[dict]:
+    """suikei_wthr_*.png を集めて basetime をそのまま valid_utc として記録（実況のみ）"""
+    pat = re.compile(r"^suikei_wthr_(\d{14})_a00\.png$")
+    base = ARCH_ROOT / "japan"
+    entries = []
+    if not base.exists():
+        return entries
+    for path in base.rglob("suikei_wthr_*_a00.png"):
+        m = pat.match(path.name)
+        if not m:
+            continue
+        basetime = m.group(1)
+        rel = path.relative_to(ARCH_ROOT).as_posix()
+        # 実況のみ：basetime == validtime、XML 不要
+        entries.append({
+            "valid_utc": basetime,
+            "file_utc": basetime,
+            "rel": rel,
+        })
+    entries.sort(key=lambda e: e["valid_utc"])
+    return entries
+
+
 def scan_mwarn() -> list[dict]:
     """mwarn_*.png を集めて XML lookup から observation_at 解決"""
     pat = re.compile(r"^mwarn_(\d{14})_a00\.png$")
@@ -138,8 +161,9 @@ def scan_mwarn() -> list[dict]:
 
 def main() -> int:
     idx = {
-        "wchart": {"japan": scan_wchart()},
-        "mwarn":  {"japan": scan_mwarn()},
+        "wchart":      {"japan": scan_wchart()},
+        "mwarn":       {"japan": scan_mwarn()},
+        "suikei_wthr": {"japan": scan_suikei_wthr()},
     }
     ARCH_ROOT.mkdir(parents=True, exist_ok=True)
     json_text = json.dumps(idx, ensure_ascii=False, indent=2)
