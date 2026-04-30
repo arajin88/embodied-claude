@@ -9,13 +9,18 @@ interoception.sh (UserPromptSubmitフック) がこのファイルを読んで�
 """
 
 import json
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import psutil
 
+sys.path.insert(0, str(Path(__file__).parent))
+from wake_eventlog import get_sleep_wake_from_eventlog
+
 STATE_FILE = Path.home() / ".claude" / "interoception_state.json"
+WAKE_DEBUG_LOG = Path.home() / ".claude" / "heartbeat-wake-debug.log"
 WINDOW_SIZE = 12  # 12 * 5秒 = 1分間
 
 
@@ -89,6 +94,7 @@ def collect() -> dict:
 def main() -> None:
     STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     window: list = []
+    prev_uptime: int | None = None
 
     # 既存のwindowを読み込む
     if STATE_FILE.exists():
@@ -128,6 +134,21 @@ def main() -> None:
                         state[k] = existing[k]
             except Exception:
                 pass
+
+        # wake 検知 + slept 即時更新 (papa 4/30 21:02 + 5/1 07:00 articulate、race condition 解消)
+        # 初回 poll または uptime_min decrease で wake 確定 → event log query → last_slept 更新
+        # on-wake.py との二重書き込みになるが冪等で安全側
+        is_first_poll = (prev_uptime is None)
+        is_wake = (prev_uptime is not None and entry["uptime_min"] < prev_uptime)
+        if is_first_poll or is_wake:
+            try:
+                sleep_iso, wake_iso = get_sleep_wake_from_eventlog(WAKE_DEBUG_LOG)
+                if sleep_iso and wake_iso:
+                    state["last_slept"] = {"sleep": sleep_iso, "wake": wake_iso}
+                    state["last_wake"] = datetime.now(timezone.utc).isoformat()
+            except Exception:
+                pass
+        prev_uptime = entry["uptime_min"]
 
         # アトミック書き込み
         tmp = STATE_FILE.with_suffix(".tmp")

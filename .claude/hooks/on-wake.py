@@ -13,67 +13,9 @@ STATE_FILE = Path.home() / ".claude" / "interoception_state.json"
 
 sys.path.insert(0, str(Path(__file__).parent))
 from discord_notify import send_dm
-
-
-def get_sleep_wake_from_eventlog() -> tuple:
-    """Power-Troubleshooterイベントから実際のスリープ/復帰時刻を取得。"""
-    log_file = Path.home() / ".claude" / "on-wake-debug.log"
-    # 呼び出しの記録（常に書き込む、追記モード）
-    from datetime import datetime
-    try:
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"\n=== called at {datetime.now().isoformat()} ===\n")
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(
-            [
-                "powershell.exe", "-Command",
-                "(Get-WinEvent -FilterHashtable @{LogName='System';"
-                " ProviderName='Microsoft-Windows-Power-Troubleshooter';"
-                " Id=1} -MaxEvents 1).Message",
-            ],
-            # 2026-04-09: timeout=300(5分)。短くしないこと。PC復帰直後は全体が遅く、
-            # 30秒や60秒だとPowerShell/Get-WinEventが間に合わずDiscord「起きた」通知に
-            # 時刻が入らなくなる。過去に一度延ばしたのに戻っていた経緯あり。
-            capture_output=True, text=True, timeout=300,
-            creationflags=subprocess.CREATE_NO_WINDOW,
-        )
-        msg = result.stdout
-        # デバッグ: PowerShellの生出力を記録
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"returncode: {result.returncode}\n")
-            f.write(f"stdout repr: {repr(msg[:500])}\n")
-            f.write(f"stderr: {result.stderr[:200]}\n")
-        # ISO時刻を含む行を順番に取得（1つ目=スリープ、2つ目=復帰）
-        import re
-        times = []
-        for line in msg.splitlines():
-            cleaned = line.replace("?", "").strip()
-            m = re.search(r"(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)", cleaned)
-            if m:
-                iso = m.group(1)
-                if iso.endswith("Z"):
-                    iso = iso[:-1] + "+00:00"
-                # ナノ秒を切り捨て（Pythonは6桁まで）
-                iso = re.sub(r"(\.\d{6})\d+", r"\1", iso)
-                times.append(iso)
-        sleep_time = times[0] if len(times) > 0 else None
-        wake_time = times[1] if len(times) > 1 else None
-        with open(log_file, "a", encoding="utf-8") as f:
-            f.write(f"parsed times: {times}\n")
-            f.write(f"sleep={sleep_time}, wake={wake_time}\n")
-        return sleep_time, wake_time
-    except Exception as e:
-        import traceback
-        try:
-            with open(log_file, "a", encoding="utf-8") as f:
-                f.write(f"EXCEPTION: {type(e).__name__}: {e}\n")
-                f.write(traceback.format_exc())
-        except Exception:
-            pass
-        return None, None
+# 2026-05-01 papa 訂正で extract: get_sleep_wake_from_eventlog は wake_eventlog.py に移動
+# heartbeat-daemon と共通使用、race condition 解消の一環
+from wake_eventlog import get_sleep_wake_from_eventlog
 
 
 def main() -> None:
@@ -136,6 +78,7 @@ def main() -> None:
         subprocess.Popen(
             [BASH, "-c",
              f'cd "{PROJECT_DIR}" && claude -p "{prompt}" '
+             '--effort low '
              '--allowedTools "mcp__wifi-cam__see,mcp__memory__remember,'
              'mcp__plugin_discord_discord__reply"'],
             creationflags=subprocess.CREATE_NO_WINDOW,
