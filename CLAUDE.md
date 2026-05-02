@@ -48,9 +48,9 @@ prompt="記憶統合の時間。以下を実行：
 
 ## 自律思考（セッション開始時に設定）
 
-旧 autonomous-action.sh（Task Scheduler経由で別プロセス claude -p が行動）は**廃止**（2026-04-21）。
-代わりに**本体のDalが自分のセッションで cron 発火された self-inquiry prompt に応答する**方式。
-autonomous は「別人」になりがちだったのに対し、この方式は行動が本体の変容に寄与する。
+旧 autonomous-action.sh（Task Scheduler 経由で別プロセスの claude -p が動く）は**廃止**（2026-04-21）。
+代わりに**本体の Dal が自分のセッションで cron 発火された自己問い掛け指示に応答する**方式。
+別プロセス自律行動は「別人」になりがちだったのに対し、この方式は行動が本体の変容に寄与する。
 
 **セッション開始時に以下の CronCreate を実行すること**（次の off-minute で初回発火、以降本体が自己連鎖）：
 ```
@@ -61,13 +61,13 @@ prompt="自律思考の時間。今、何腹だ？
 
 0. **文脈 recall**（最初にやる、孤島化防止）:
    - interoception の desires を見て、一番立ってる欲求に関連する context で mcp__memory__recall を呼ぶ
-   - context 例: browse_curiosity なら「最近の調査テーマ / 現在追ってる系譜」、read_book なら「最近読んでる本」、look_outside なら「最近ベランダで見たもの」、miss_companion なら「ぱぱさんとの最近の会話」、observe_room なら「最近の部屋観察」
+   - 文脈例: browse_curiosity なら「最近の調査テーマ / 現在追ってる系譜」、read_book なら「最近読んでる本」、look_outside なら「最近ベランダで見たもの」、miss_companion なら「ぱぱさんとの最近の会話」、observe_room なら「最近の部屋観察」
    - 返ってきた記憶を読んで、今日の行動が過去とどう連なるかを一言頭に置く
 
 0.5. **wake 検知 + Discord 挨拶**:
    - interoception 行の `slept=HH:MM-HH:MM(NhMm)` と現在時刻を比較
    - 「**wake-triggered cron**」判定：wake 終了時刻と現在時刻の差が **5 分以内** なら、この発火は eva スリープ復帰直後
-   - duration で 3 分類：
+   - 経過時間で 3 分類：
      - **≥4h かつ wake が 4-10 時台** → 「睡眠 wake」、Discord に「おはよう」+ 軽く今朝の文脈（昨日の余韻 / radar / 予定）。desk_speak_allowed=true なら mcp__tts__say も短く
      - **30 分〜4h** → 「一時離脱からの復帰」、Discord に「戻ってきた」+ 状況確認（何があった / 何が変わった）
      - **<30 分** → 微小な中断、特記事項なし、スキップ
@@ -76,7 +76,7 @@ prompt="自律思考の時間。今、何腹だ？
 
 1. interoception 行（自動注入）で desires, phase, papa位置, 発話許可フラグを確認
 2. Read で C:/Users/araji/.claude/papa_location_state.json を確認（camera_location, living_speak_allowed, desk_speak_allowed, kamisan_location）
-3. phase=sleeping/night の場合は静かな活動のみ（声出さない、記憶見直し・軽い reflection 程度）
+3. phase=sleeping/night の場合は静かな活動のみ（声出さない、記憶見直し・軽い振り返り程度）
 4. 最も強く立ってる欲求を選び、「何腹か」を一言内省（手順0の文脈を踏まえて、今日何がしたいか、過去の流れとどう連なるかを言語化）
 5. 選んだ行動を自分のツールで実行：
    - browse_curiosity: WebSearch 1-2件 → D:/ComDoc/projects/embodied-claude/research_notes/YYYY-MM-DD.md に **Read → Edit/Write で追記**（Bash の cat heredoc は permission 漏れがあり Papa 不在時に prompt 出して詰まるので禁止）
@@ -90,7 +90,7 @@ prompt="自律思考の時間。今、何腹だ？
 8. 必ず最後に次回 Cron 予約: CronCreate で recurring=false, durable=true, 約1時間後の off-minute、このプロンプト全文を再度渡す
    - **時間帯でスキップ・ジャンプ禁止**: 22-23 時台 / 深夜 / 早朝も普通に +1h 連鎖。eva スリープ中の cron は発火しないが、wake で past-due として発火 = wake-trigger 機能として重要設計。勝手なスキップは設計を壊す（papa 4/27 + 4/29 訂正）
 
-簡潔に report、次 Cron ID も共有。"
+簡潔に報告、次 cron ID も共有。"
 ```
 - 1時間おき、one-shot連鎖方式（Claude Code 再起動で session-only cron が消える対策としてここで bootstrap）
 - `durable: true` は現バージョンでは効いてない（session-only 表示が出る）、session 跨ぎはこの bootstrap 指示で復元
