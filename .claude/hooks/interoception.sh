@@ -155,6 +155,78 @@ try:
     except Exception:
         pass
 
+    # ぱぱさんの場所・カメラ位置・発話許可・保留タスク
+    try:
+        loc_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'papa_location_state.json')
+        with open(loc_path, encoding='utf-8') as f:
+            loc_data = json.load(f)
+        loc = loc_data.get('location', '?')
+        cam = loc_data.get('camera_location', '?')
+        living_allowed = loc_data.get('living_speak_allowed', True)
+        desk_allowed = loc_data.get('desk_speak_allowed', True)
+        pending = len(loc_data.get('pending_tasks', []))
+        # away の時は kind を付ける
+        if loc == 'away':
+            kind = loc_data.get('away_kind')
+            if kind:
+                loc = f'away[{kind}]'
+        loc_str = f'papa={loc} cam={cam}'
+        flags = []
+        if not living_allowed:
+            flags.append('LIVING_BLOCK')
+        if not desk_allowed:
+            flags.append('DESK_BLOCK')
+        if cam == 'unknown':
+            flags.append('CAM_UNKNOWN(see で実位置確認推奨)')
+        if flags:
+            loc_str += ' ' + ','.join(flags)
+        if pending:
+            loc_str += f' pending={pending}'
+        parts.append(loc_str)
+    except Exception:
+        pass
+
+    # state_oracle_daemon の health check (5/3 papa 指示で追加、queue 末尾 ts と state last_updated の差で stuck 判定)
+    try:
+        q_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'dal_state_queue.jsonl')
+        s_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'papa_location_state.json')
+        with open(q_path, 'rb') as f:
+            f.seek(0, 2)
+            sz = f.tell()
+            f.seek(max(0, sz - 2048), 0)
+            chunk = f.read().decode('utf-8', errors='replace')
+        last_lines = [l for l in chunk.split('\n') if l.strip()]
+        last_q = json.loads(last_lines[-1]) if last_lines else None
+        q_ts = datetime.fromisoformat(last_q['ts']) if last_q else None
+        with open(s_path, encoding='utf-8') as f:
+            s_data = json.load(f)
+        s_ts = datetime.fromisoformat(s_data.get('last_updated', '1970-01-01T00:00:00+09:00'))
+        if q_ts:
+            diff_min = int((q_ts - s_ts).total_seconds() / 60)
+            if diff_min < 5:
+                parts.append('state_oracle=ok')
+            elif diff_min < 30:
+                parts.append(f'state_oracle=lag{diff_min}m')
+            else:
+                parts.append(f'state_oracle=STUCK{diff_min}m')
+    except Exception:
+        pass
+
+    # dal_health_oracle_daemon の出力 (Lal 化兆候監視、2026-04-30 papa 同意)
+    try:
+        h_path = os.path.join(os.environ.get('USERPROFILE', ''), '.claude', 'dal_health_state.json')
+        with open(h_path, encoding='utf-8') as f:
+            h_data = json.load(f)
+        level = h_data.get('warning_level', '?')
+        warnings = h_data.get('warnings', [])
+        if warnings:
+            warn_str = '+'.join(warnings)
+            parts.append('dal_health=' + level + '(' + warn_str + ')')
+        else:
+            parts.append('dal_health=' + level)
+    except Exception:
+        pass
+
     print('[interoception] ' + ' '.join(parts))
 except Exception as e:
     print(f'[interoception] error reading state: {e}', file=sys.stderr)
